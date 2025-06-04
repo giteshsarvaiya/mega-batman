@@ -101,8 +101,10 @@ export const {
           const [dbUser] = await createOrUpdateGitHubUser({
             email: profile.email, // Can be null, that's fine
             githubId: profile.id.toString(),
-            githubUsername: typeof profile.login === 'string' ? profile.login : '',
-            avatarUrl: typeof profile.avatar_url === 'string' ? profile.avatar_url : '',
+            githubUsername:
+              typeof profile.login === 'string' ? profile.login : '',
+            avatarUrl:
+              typeof profile.avatar_url === 'string' ? profile.avatar_url : '',
           });
 
           // Update user object with database ID
