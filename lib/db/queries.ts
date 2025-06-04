@@ -18,7 +18,6 @@ import postgres from 'postgres';
 import {
   user,
   chat,
-  type User,
   document,
   type Suggestion,
   suggestion,
@@ -29,8 +28,6 @@ import {
   stream,
 } from './schema';
 import type { ArtifactKind } from '@/components/artifact';
-import { generateUUID } from '../utils';
-import { generateHashedPassword } from './utils';
 import type { VisibilityType } from '@/components/visibility-selector';
 import { ChatSDKError } from '../errors';
 
@@ -42,40 +39,86 @@ import { ChatSDKError } from '../errors';
 const client = postgres(process.env.POSTGRES_URL!);
 const db = drizzle(client);
 
-export async function getUser(email: string): Promise<Array<User>> {
-  try {
-    return await db.select().from(user).where(eq(user.email, email));
-  } catch (error) {
-    throw new ChatSDKError(
-      'bad_request:database',
-      'Failed to get user by email',
-    );
-  }
-}
-
-export async function createUser(email: string, password: string) {
-  const hashedPassword = generateHashedPassword(password);
-
-  try {
-    return await db.insert(user).values({ email, password: hashedPassword });
-  } catch (error) {
-    throw new ChatSDKError('bad_request:database', 'Failed to create user');
-  }
-}
-
 export async function createGuestUser() {
   const email = `guest-${Date.now()}`;
-  const password = generateHashedPassword(generateUUID());
 
   try {
-    return await db.insert(user).values({ email, password }).returning({
-      id: user.id,
-      email: user.email,
-    });
+    return await db
+      .insert(user)
+      .values({
+        email,
+        password: null,
+        githubId: null,
+        avatarUrl: null,
+      })
+      .returning({
+        id: user.id,
+        email: user.email,
+      });
   } catch (error) {
     throw new ChatSDKError(
       'bad_request:database',
       'Failed to create guest user',
+    );
+  }
+}
+
+export async function createOrUpdateGitHubUser({
+  email,
+  githubId,
+  githubUsername,
+  avatarUrl,
+}: {
+  email?: string | null;
+  githubId: string;
+  githubUsername: string;
+  avatarUrl: string;
+}) {
+  try {
+    // First try to find existing user by GitHub ID
+    const existingUser = await db
+      .select()
+      .from(user)
+      .where(eq(user.githubId, githubId));
+
+    if (existingUser.length > 0) {
+      // Update existing user
+      return await db
+        .update(user)
+        .set({ email, githubUsername, avatarUrl })
+        .where(eq(user.githubId, githubId))
+        .returning({
+          id: user.id,
+          email: user.email,
+          githubId: user.githubId,
+          githubUsername: user.githubUsername,
+          avatarUrl: user.avatarUrl,
+        });
+    } else {
+      // Create new user - use GitHub username as email fallback
+      const fallbackEmail = email || `${githubUsername}@github.local`;
+      return await db
+        .insert(user)
+        .values({
+          email: fallbackEmail,
+          password: null,
+          githubId,
+          githubUsername,
+          avatarUrl,
+        })
+        .returning({
+          id: user.id,
+          email: user.email,
+          githubId: user.githubId,
+          githubUsername: user.githubUsername,
+          avatarUrl: user.avatarUrl,
+        });
+    }
+  } catch (error) {
+    console.error('Database error in createOrUpdateGitHubUser:', error);
+    throw new ChatSDKError(
+      'bad_request:database',
+      `Failed to create or update GitHub user: ${error instanceof Error ? error.message : 'Unknown error'}`,
     );
   }
 }
