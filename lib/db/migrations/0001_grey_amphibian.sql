@@ -1,2 +1,2 @@
-DROP TABLE "Document";--> statement-breakpoint
-DROP TABLE "Suggestion";
+DROP TABLE "Suggestion";--> statement-breakpoint
+DROP TABLE "Document";
