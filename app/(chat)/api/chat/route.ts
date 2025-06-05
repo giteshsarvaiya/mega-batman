@@ -149,10 +149,19 @@ export async function POST(request: Request) {
 
     const stream = createDataStream({
       execute: async (dataStream) => {
+        // Log enabled toolkits with connection status
+        console.log(
+          'Enabled toolkits with connection status:',
+          enabledToolkits,
+        );
+
+        // Extract just the slugs for the getComposioTools function
+        const toolkitSlugs = enabledToolkits?.map((t) => t.slug) || [];
+
         // Fetch Composio tools if toolkits are enabled
         const composioTools = await getComposioTools(
           session.user.id,
-          enabledToolkits || [],
+          toolkitSlugs,
         );
 
         const result = streamText({
@@ -160,8 +169,6 @@ export async function POST(request: Request) {
           system: systemPrompt({ selectedChatModel, requestHints }),
           messages,
           maxSteps: 5,
-          experimental_activeTools:
-            selectedChatModel === 'chat-model-reasoning' ? [] : ['getWeather'],
           experimental_transform: smoothStream({ chunking: 'word' }),
           experimental_generateMessageId: generateUUID,
           tools: {

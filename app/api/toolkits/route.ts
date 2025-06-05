@@ -43,17 +43,20 @@ export async function GET() {
 
   try {
     // Fetch connected accounts for the user
-    const connectedToolkitSlugs: Set<string> = new Set();
+    const connectedToolkitMap: Map<string, string> = new Map(); // slug -> connectionId
 
     try {
       const connectedAccounts = await composio.connectedAccounts.list({
         userIds: [session.user.id],
       });
 
-      // Extract toolkit slugs from connected accounts
+      // Extract toolkit slugs and connection IDs from connected accounts
       connectedAccounts.items.forEach((account: ConnectedAccount) => {
-        if (account.toolkit?.slug) {
-          connectedToolkitSlugs.add(account.toolkit.slug.toUpperCase());
+        if (account.toolkit?.slug && account.id) {
+          connectedToolkitMap.set(
+            account.toolkit.slug.toUpperCase(),
+            account.id,
+          );
         }
       });
     } catch (error) {
@@ -65,13 +68,17 @@ export async function GET() {
     const toolkitPromises = SUPPORTED_TOOLKITS.map(async (slug) => {
       try {
         const toolkit = (await composio.toolkits.get(slug)) as ToolkitResponse;
+        const upperSlug = slug.toUpperCase();
+        const connectionId = connectedToolkitMap.get(upperSlug);
+
         return {
           name: toolkit.name,
           slug: toolkit.slug,
           description: toolkit.meta?.description,
           logo: toolkit.meta?.logo,
           categories: toolkit.meta?.categories,
-          isConnected: connectedToolkitSlugs.has(slug.toUpperCase()),
+          isConnected: !!connectionId,
+          connectionId: connectionId || undefined,
         };
       } catch (error) {
         console.error(`Failed to fetch toolkit ${slug}:`, error);

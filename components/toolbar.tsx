@@ -34,21 +34,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ExternalLink, Loader2, X, Wrench, Check } from 'lucide-react';
+import { ExternalLink, Loader2, X, Wrench, Check, Trash2 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
-
-// Define the toolkit slugs we want to show
-const SUPPORTED_TOOLKITS = [
-  'GMAIL',
-  'GOOGLECALENDAR',
-  'GITHUB',
-  'NOTION',
-  'SLACK',
-  'LINEAR',
-];
 
 // Map of toolkit slugs to their auth config environment variables
 const TOOLKIT_AUTH_CONFIG: Record<string, string> = {
@@ -77,6 +67,7 @@ type ToolkitMetadata = {
     slug: string;
   }>;
   isConnected?: boolean;
+  connectionId?: string;
 };
 
 interface ToolCardProps {
@@ -84,11 +75,19 @@ interface ToolCardProps {
   isEnabled: boolean;
   onToggle: (enabled: boolean) => void;
   userId?: string;
+  onConnectionDeleted?: () => void;
 }
 
-function ToolCard({ toolkit, isEnabled, onToggle, userId }: ToolCardProps) {
+function ToolCard({
+  toolkit,
+  isEnabled,
+  onToggle,
+  userId,
+  onConnectionDeleted,
+}: ToolCardProps) {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [isConnecting, setIsConnecting] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
   const { toast } = useToast();
 
   const handleConnect = async () => {
@@ -155,6 +154,48 @@ function ToolCard({ toolkit, isEnabled, onToggle, userId }: ToolCardProps) {
     }
   };
 
+  const handleDelete = async () => {
+    if (!toolkit.connectionId) {
+      toast({
+        title: 'Error',
+        description: 'No connection found to delete.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(
+        `/api/connections?connectionId=${toolkit.connectionId}`,
+        {
+          method: 'DELETE',
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to delete connection');
+      }
+
+      toast({
+        title: 'Connection deleted',
+        description: `${toolkit.name} has been disconnected successfully.`,
+      });
+
+      // Notify parent to refresh the toolkit list
+      onConnectionDeleted?.();
+    } catch (error) {
+      console.error('Failed to delete connection:', error);
+      toast({
+        title: 'Deletion failed',
+        description: `Failed to disconnect ${toolkit.name}. Please try again.`,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <Card className="mb-3">
       <CardHeader className="pb-3">
@@ -188,15 +229,31 @@ function ToolCard({ toolkit, isEnabled, onToggle, userId }: ToolCardProps) {
       </CardContent>
       <CardFooter className="pt-0">
         {toolkit.isConnected ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            className="w-full cursor-default"
-            disabled
-          >
-            <Check className="mr-2 size-4 text-green-600" />
-            <span className="text-green-600">Connected</span>
-          </Button>
+          <div className="flex gap-2 w-full">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="flex-1 cursor-default"
+              disabled
+            >
+              <Check className="mr-2 size-4 text-green-600" />
+              <span className="text-green-600">Connected</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="px-3"
+              title="Disconnect"
+            >
+              {isDeleting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+            </Button>
+          </div>
         ) : (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -256,6 +313,11 @@ function ToolCard({ toolkit, isEnabled, onToggle, userId }: ToolCardProps) {
   );
 }
 
+export type EnabledToolkit = {
+  slug: string;
+  isConnected: boolean;
+};
+
 type ToolbarContext = {
   state: 'expanded' | 'collapsed';
   open: boolean;
@@ -266,6 +328,10 @@ type ToolbarContext = {
   toggleToolbar: () => void;
   enabledTools: Set<string>;
   setEnabledTools: React.Dispatch<React.SetStateAction<Set<string>>>;
+  enabledToolkitsWithStatus: Map<string, boolean>; // slug -> isConnected
+  setEnabledToolkitsWithStatus: React.Dispatch<
+    React.SetStateAction<Map<string, boolean>>
+  >;
 };
 
 const ToolbarContext = React.createContext<ToolbarContext | null>(null);
@@ -279,9 +345,13 @@ function useToolbar() {
 }
 
 export function useToolbarState() {
-  const { enabledTools, setEnabledTools } = useToolbar();
+  const { enabledTools, setEnabledTools, enabledToolkitsWithStatus } =
+    useToolbar();
   return {
-    state: { enabledTools },
+    state: {
+      enabledTools,
+      enabledToolkitsWithStatus,
+    },
     setState: (
       updater: React.SetStateAction<{ enabledTools: Set<string> }>,
     ) => {
@@ -306,6 +376,8 @@ export function ToolbarProvider({ children }: { children: React.ReactNode }) {
   const [enabledTools, setEnabledTools] = React.useState<Set<string>>(
     new Set(),
   );
+  const [enabledToolkitsWithStatus, setEnabledToolkitsWithStatus] =
+    React.useState<Map<string, boolean>>(new Map());
 
   // This is the internal state of the toolbar.
   const [_open, _setOpen] = React.useState(false);
@@ -356,6 +428,8 @@ export function ToolbarProvider({ children }: { children: React.ReactNode }) {
       toggleToolbar,
       enabledTools,
       setEnabledTools,
+      enabledToolkitsWithStatus,
+      setEnabledToolkitsWithStatus,
     }),
     [
       state,
@@ -367,6 +441,8 @@ export function ToolbarProvider({ children }: { children: React.ReactNode }) {
       toggleToolbar,
       enabledTools,
       setEnabledTools,
+      enabledToolkitsWithStatus,
+      setEnabledToolkitsWithStatus,
     ],
   );
 
@@ -379,38 +455,59 @@ export function ToolbarProvider({ children }: { children: React.ReactNode }) {
 
 function ToolbarDesktop() {
   const { data: session } = useSession();
-  const { state, enabledTools, setEnabledTools } = useToolbar();
+  const {
+    state,
+    enabledTools,
+    setEnabledTools,
+    enabledToolkitsWithStatus,
+    setEnabledToolkitsWithStatus,
+  } = useToolbar();
   const [toolkits, setToolkits] = React.useState<ToolkitMetadata[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    async function fetchToolkits() {
-      setIsLoading(true);
-      setFetchError(null);
-      try {
-        const response = await fetch('/api/toolkits');
+  const fetchToolkits = React.useCallback(async () => {
+    setIsLoading(true);
+    setFetchError(null);
+    try {
+      const response = await fetch('/api/toolkits');
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch toolkits');
-        }
-
-        const { toolkits } = await response.json();
-        setToolkits(toolkits);
-      } catch (error) {
-        console.error('Failed to fetch toolkits:', error);
-        setFetchError('Failed to load tools. Please try again.');
-        // Retry after 3 seconds
-        setTimeout(() => setFetchError(null), 3000);
-      } finally {
-        setIsLoading(false);
+      if (!response.ok) {
+        throw new Error('Failed to fetch toolkits');
       }
+
+      const { toolkits } = await response.json();
+      setToolkits(toolkits);
+
+      // Update connection status for enabled toolkits
+      setEnabledToolkitsWithStatus((prev) => {
+        const newMap = new Map(prev);
+        toolkits.forEach((toolkit: ToolkitMetadata) => {
+          if (newMap.has(toolkit.slug)) {
+            newMap.set(toolkit.slug, toolkit.isConnected || false);
+          }
+        });
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Failed to fetch toolkits:', error);
+      setFetchError('Failed to load tools. Please try again.');
+      // Retry after 3 seconds
+      setTimeout(() => setFetchError(null), 3000);
+    } finally {
+      setIsLoading(false);
     }
+  }, [setEnabledToolkitsWithStatus]);
 
+  React.useEffect(() => {
     fetchToolkits();
-  }, []);
+  }, [fetchToolkits]);
 
-  const handleToggle = (toolSlug: string, enabled: boolean) => {
+  const handleToggle = (
+    toolSlug: string,
+    enabled: boolean,
+    isConnected = false,
+  ) => {
     setEnabledTools((prev) => {
       const newEnabledTools = new Set(prev);
       if (enabled) {
@@ -419,6 +516,16 @@ function ToolbarDesktop() {
         newEnabledTools.delete(toolSlug);
       }
       return newEnabledTools;
+    });
+
+    setEnabledToolkitsWithStatus((prev) => {
+      const newMap = new Map(prev);
+      if (enabled) {
+        newMap.set(toolSlug, isConnected);
+      } else {
+        newMap.delete(toolSlug);
+      }
+      return newMap;
     });
   };
 
@@ -498,9 +605,14 @@ function ToolbarDesktop() {
                       toolkit={toolkit}
                       isEnabled={enabledTools.has(toolkit.slug)}
                       onToggle={(enabled) =>
-                        handleToggle(toolkit.slug, enabled)
+                        handleToggle(
+                          toolkit.slug,
+                          enabled,
+                          toolkit.isConnected || false,
+                        )
                       }
                       userId={session?.user?.id}
+                      onConnectionDeleted={fetchToolkits}
                     />
                   ))}
                 </>
@@ -515,41 +627,62 @@ function ToolbarDesktop() {
 
 function ToolbarMobile() {
   const { data: session } = useSession();
-  const { openMobile, setOpenMobile, enabledTools, setEnabledTools } =
-    useToolbar();
+  const {
+    openMobile,
+    setOpenMobile,
+    enabledTools,
+    setEnabledTools,
+    enabledToolkitsWithStatus,
+    setEnabledToolkitsWithStatus,
+  } = useToolbar();
   const [toolkits, setToolkits] = React.useState<ToolkitMetadata[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
-    async function fetchToolkits() {
-      if (!openMobile) return;
+  const fetchToolkits = React.useCallback(async () => {
+    if (!openMobile) return;
 
-      setIsLoading(true);
-      setFetchError(null);
-      try {
-        const response = await fetch('/api/toolkits');
+    setIsLoading(true);
+    setFetchError(null);
+    try {
+      const response = await fetch('/api/toolkits');
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch toolkits');
-        }
-
-        const { toolkits } = await response.json();
-        setToolkits(toolkits);
-      } catch (error) {
-        console.error('Failed to fetch toolkits:', error);
-        setFetchError('Failed to load tools. Please try again.');
-        // Retry after 3 seconds
-        setTimeout(() => setFetchError(null), 3000);
-      } finally {
-        setIsLoading(false);
+      if (!response.ok) {
+        throw new Error('Failed to fetch toolkits');
       }
+
+      const { toolkits } = await response.json();
+      setToolkits(toolkits);
+
+      // Update connection status for enabled toolkits
+      setEnabledToolkitsWithStatus((prev) => {
+        const newMap = new Map(prev);
+        toolkits.forEach((toolkit: ToolkitMetadata) => {
+          if (newMap.has(toolkit.slug)) {
+            newMap.set(toolkit.slug, toolkit.isConnected || false);
+          }
+        });
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Failed to fetch toolkits:', error);
+      setFetchError('Failed to load tools. Please try again.');
+      // Retry after 3 seconds
+      setTimeout(() => setFetchError(null), 3000);
+    } finally {
+      setIsLoading(false);
     }
+  }, [openMobile, setEnabledToolkitsWithStatus]);
 
+  React.useEffect(() => {
     fetchToolkits();
-  }, [openMobile]);
+  }, [fetchToolkits]);
 
-  const handleToggle = (toolSlug: string, enabled: boolean) => {
+  const handleToggle = (
+    toolSlug: string,
+    enabled: boolean,
+    isConnected = false,
+  ) => {
     setEnabledTools((prev) => {
       const newEnabledTools = new Set(prev);
       if (enabled) {
@@ -558,6 +691,16 @@ function ToolbarMobile() {
         newEnabledTools.delete(toolSlug);
       }
       return newEnabledTools;
+    });
+
+    setEnabledToolkitsWithStatus((prev) => {
+      const newMap = new Map(prev);
+      if (enabled) {
+        newMap.set(toolSlug, isConnected);
+      } else {
+        newMap.delete(toolSlug);
+      }
+      return newMap;
     });
   };
 
@@ -610,9 +753,14 @@ function ToolbarMobile() {
                       toolkit={toolkit}
                       isEnabled={enabledTools.has(toolkit.slug)}
                       onToggle={(enabled) =>
-                        handleToggle(toolkit.slug, enabled)
+                        handleToggle(
+                          toolkit.slug,
+                          enabled,
+                          toolkit.isConnected || false,
+                        )
                       }
                       userId={session?.user?.id}
+                      onConnectionDeleted={fetchToolkits}
                     />
                   ))}
                 </>

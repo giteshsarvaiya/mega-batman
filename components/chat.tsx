@@ -69,7 +69,9 @@ export function Chat({
       message: body.messages.at(-1),
       selectedChatModel: initialChatModel,
       selectedVisibilityType: visibilityType,
-      enabledToolkits: Array.from(toolbarState.enabledTools),
+      enabledToolkits: Array.from(
+        toolbarState.enabledToolkitsWithStatus.entries(),
+      ).map(([slug, isConnected]) => ({ slug, isConnected })),
     }),
     onFinish: () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
