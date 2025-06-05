@@ -88,7 +88,90 @@ function ToolCard({
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [isConnecting, setIsConnecting] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [connectionStatus, setConnectionStatus] = React.useState<
+    'idle' | 'connecting' | 'checking' | 'active' | 'failed' | 'expired'
+  >('idle');
+  const [activeConnectionId, setActiveConnectionId] = React.useState<
+    string | null
+  >(null);
+  const pollingTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+
+  // Reset connection status when toolkit connection changes
+  React.useEffect(() => {
+    if (toolkit.isConnected) {
+      setConnectionStatus('idle');
+      setActiveConnectionId(null);
+    }
+  }, [toolkit.isConnected]);
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      setConnectionStatus('idle');
+      setActiveConnectionId(null);
+      // Clear any pending polling timeouts
+      if (pollingTimeoutRef.current) {
+        clearTimeout(pollingTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const checkConnectionStatus = React.useCallback(
+    async (connectionId: string) => {
+      setConnectionStatus('checking');
+      try {
+        const response = await fetch(
+          `/api/connections/status?connectionId=${connectionId}`,
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to check connection status');
+        }
+
+        const data = await response.json();
+
+        switch (data.status) {
+          case 'ACTIVE':
+            setConnectionStatus('active');
+            toast({
+              title: 'Connection successful',
+              description: `${toolkit.name} has been connected successfully.`,
+            });
+            // Refresh the toolkit list to update connection status
+            onConnectionDeleted?.();
+            break;
+          case 'FAILED':
+            setConnectionStatus('failed');
+            toast({
+              title: 'Connection failed',
+              description: `Failed to connect ${toolkit.name}. Please try again.`,
+              variant: 'destructive',
+            });
+            break;
+          case 'EXPIRED':
+            setConnectionStatus('expired');
+            toast({
+              title: 'Connection expired',
+              description: `The connection request has expired. Please try again.`,
+              variant: 'destructive',
+            });
+            break;
+          case 'INITIALIZING':
+          case 'INITIATED':
+            // Still in progress, check again after delay
+            pollingTimeoutRef.current = setTimeout(() => {
+              checkConnectionStatus(connectionId);
+            }, 2000);
+            break;
+        }
+      } catch (error) {
+        console.error('Failed to check connection status:', error);
+        setConnectionStatus('failed');
+      }
+    },
+    [toolkit.name, onConnectionDeleted, toast, pollingTimeoutRef],
+  );
 
   const handleConnect = async () => {
     if (!userId) {
@@ -112,6 +195,7 @@ function ToolCard({
     }
 
     setIsConnecting(true);
+    setConnectionStatus('connecting');
     try {
       const response = await fetch('/api/connections/initiate', {
         method: 'POST',
@@ -126,20 +210,32 @@ function ToolCard({
       }
 
       const data = await response.json();
-      const { redirectUrl } = data;
+      const { redirectUrl, connectionId } = data;
 
-      if (redirectUrl) {
+      if (redirectUrl && connectionId) {
+        // Store the connection ID for status tracking
+        setActiveConnectionId(connectionId);
+
+        // Open OAuth window
         window.open(redirectUrl, '_blank');
+
+        // Close dialog but keep tracking status
+        setIsDialogOpen(false);
+
         toast({
           title: 'Authorization started',
           description: `Complete the authorization in the opened window for ${toolkit.name}.`,
         });
+
+        // Start checking connection status after a short delay
+        setTimeout(() => checkConnectionStatus(connectionId), 3000);
       } else {
         toast({
           title: 'Connection issue',
           description: 'No authorization URL received. Please try again.',
           variant: 'destructive',
         });
+        setConnectionStatus('failed');
       }
     } catch (error) {
       console.error('Failed to initiate connection:', error);
@@ -148,9 +244,9 @@ function ToolCard({
         description: `Failed to connect ${toolkit.name}. Please try again.`,
         variant: 'destructive',
       });
+      setConnectionStatus('failed');
     } finally {
       setIsConnecting(false);
-      setIsDialogOpen(false);
     }
   };
 
@@ -228,7 +324,38 @@ function ToolCard({
         </CardDescription>
       </CardContent>
       <CardFooter className="pt-0">
-        {toolkit.isConnected ? (
+        {/* Show different UI based on connection status */}
+        {connectionStatus === 'connecting' ||
+        connectionStatus === 'checking' ? (
+          <div className="flex gap-2 w-full">
+            <Button variant="outline" size="sm" className="flex-1" disabled>
+              <Loader2 className="mr-2 size-4 animate-spin" />
+              {connectionStatus === 'connecting'
+                ? 'Connecting...'
+                : 'Verifying connection...'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Cancel the connection attempt
+                if (pollingTimeoutRef.current) {
+                  clearTimeout(pollingTimeoutRef.current);
+                }
+                setConnectionStatus('idle');
+                setActiveConnectionId(null);
+                toast({
+                  title: 'Connection cancelled',
+                  description: 'The connection attempt has been cancelled.',
+                });
+              }}
+              className="px-3"
+              title="Cancel"
+            >
+              <X className="size-4" />
+            </Button>
+          </div>
+        ) : connectionStatus === 'active' || toolkit.isConnected ? (
           <div className="flex gap-2 w-full">
             <Button
               variant="secondary"
@@ -252,6 +379,26 @@ function ToolCard({
               ) : (
                 <Trash2 className="size-4" />
               )}
+            </Button>
+          </div>
+        ) : connectionStatus === 'failed' || connectionStatus === 'expired' ? (
+          <div className="w-full space-y-2">
+            <div className="text-xs text-destructive text-center">
+              {connectionStatus === 'failed'
+                ? 'Connection failed'
+                : 'Connection expired'}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                setConnectionStatus('idle');
+                setIsDialogOpen(true);
+              }}
+              disabled={!isEnabled}
+            >
+              Try Again
             </Button>
           </div>
         ) : (
