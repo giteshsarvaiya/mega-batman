@@ -33,6 +33,7 @@ import { after } from 'next/server';
 import type { Chat } from '@/lib/db/schema';
 import { differenceInSeconds } from 'date-fns';
 import { ChatSDKError } from '@/lib/errors';
+import { getComposioTools } from '@/lib/ai/tools/composio';
 
 export const maxDuration = 60;
 
@@ -69,8 +70,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { id, message, selectedChatModel, selectedVisibilityType } =
-      requestBody;
+    const {
+      id,
+      message,
+      selectedChatModel,
+      selectedVisibilityType,
+      enabledToolkits,
+    } = requestBody;
 
     const session = await auth();
 
@@ -142,7 +148,13 @@ export async function POST(request: Request) {
     await createStreamId({ streamId, chatId: id });
 
     const stream = createDataStream({
-      execute: (dataStream) => {
+      execute: async (dataStream) => {
+        // Fetch Composio tools if toolkits are enabled
+        const composioTools = await getComposioTools(
+          session.user.id,
+          enabledToolkits || [],
+        );
+
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),
@@ -154,6 +166,7 @@ export async function POST(request: Request) {
           experimental_generateMessageId: generateUUID,
           tools: {
             getWeather,
+            ...composioTools,
           },
           onFinish: async ({ response }) => {
             if (session.user?.id) {

@@ -18,6 +18,7 @@ import { useSearchParams } from 'next/navigation';
 import { useChatVisibility } from '@/hooks/use-chat-visibility';
 import { useAutoResume } from '@/hooks/use-auto-resume';
 import { ChatSDKError } from '@/lib/errors';
+import { useToolbarState } from './toolbar';
 
 export function Chat({
   id,
@@ -37,6 +38,7 @@ export function Chat({
   autoResume: boolean;
 }) {
   const { mutate } = useSWRConfig();
+  const { state: toolbarState } = useToolbarState();
 
   const { visibilityType } = useChatVisibility({
     chatId: id,
@@ -67,6 +69,7 @@ export function Chat({
       message: body.messages.at(-1),
       selectedChatModel: initialChatModel,
       selectedVisibilityType: visibilityType,
+      enabledToolkits: Array.from(toolbarState.enabledTools),
     }),
     onFinish: () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
