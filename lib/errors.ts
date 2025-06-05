@@ -13,8 +13,7 @@ export type Surface =
   | 'stream'
   | 'database'
   | 'history'
-  | 'vote'
-;
+  | 'vote';
 
 export type ErrorCode = `${ErrorType}:${Surface}`;
 
@@ -94,7 +93,6 @@ export function getMessageByErrorCode(errorCode: ErrorCode): string {
       return 'You need to sign in to view this chat. Please sign in and try again.';
     case 'offline:chat':
       return "We're having trouble sending your message. Please check your internet connection and try again.";
-
 
     default:
       return 'Something went wrong. Please try again later.';
