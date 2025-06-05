@@ -10,6 +10,7 @@ import { Markdown } from './markdown';
 import { MessageActions } from './message-actions';
 import { PreviewAttachment } from './preview-attachment';
 import { Weather } from './weather';
+import { ToolCall } from './tool-call';
 import equal from 'fast-deep-equal';
 import { cn, sanitizeText } from '@/lib/utils';
 import { Button } from './ui/button';
@@ -175,7 +176,13 @@ const PurePreviewMessage = ({
                         <div className="text-muted-foreground text-sm">
                           Processing...
                         </div>
-                      ) : null}
+                      ) : (
+                        <ToolCall
+                          toolName={toolName}
+                          args={args}
+                          isLoading={true}
+                        />
+                      )}
                     </div>
                   );
                 }
@@ -196,7 +203,12 @@ const PurePreviewMessage = ({
                           Completed
                         </div>
                       ) : (
-                        <pre>{JSON.stringify(result, null, 2)}</pre>
+                        <ToolCall
+                          toolName={toolName}
+                          args={toolInvocation.args}
+                          result={result}
+                          isLoading={false}
+                        />
                       )}
                     </div>
                   );
