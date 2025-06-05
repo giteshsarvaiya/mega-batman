@@ -1,0 +1,14 @@
+- [Welcome to Composio](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/welcome.mdx): Our API and SDKs enable developers to build AI applications and experiences that are a step above the rest.
+- [Quickstart](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/quickstart.mdx): Add authenticated tool-calling to any LLM agent in three steps.
+- [Providers](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/toolsets.mdx)
+- [Executing Tools](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/executing-tools.mdx): Learn how to execute Composio's tools with different providers and frameworks
+- [Authenticating Tools](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/authenticating-tools.mdx): Learn how to authenticate tools
+- [Fetching and Filtering Tools](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/fetching-tools.mdx): Learn how to fetch and filter Composio's tools and toolsets
+- [Schema Modifiers](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/modifiers/schema-modifiers.mdx): Learn how to use schema modifiers to transform tool schemas before they are seen by agents.
+- [Before Execution Modifiers](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/modifiers/before-execution.mdx): Learn how to use before execution modifiers to modify tool arguments before execution.
+- [After Execution Modifiers](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/modifiers/after-execution.mdx): Learn how to use after execution modifiers to transform tool results after execution.
+- [Custom Auth Configs](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/custom-auth-configs.mdx): Guide to using customising auth configs for a toolkit
+- [Programmatic Auth Configs](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/programmatic-auth-configs.mdx): Guide to creating auth configs programmatically
+- [Custom Auth Parameters](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/custom-auth-params.mdx): Guide to injecting custom credentials in headers or parameters for a toolkit
+- [Using Triggers](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/docs/using-triggers.mdx): Send payloads to your system based on external events
+- [Vercel AI SDK Provider](https://composio-preview-62f4ee07-889c-40c1-a9c1-3fb7f720df2f.docs.buildwithfern.com/v3/providers/vercel.mdx)
