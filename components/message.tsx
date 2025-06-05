@@ -167,8 +167,14 @@ const PurePreviewMessage = ({
                     >
                       {toolName === 'getWeather' ? (
                         <Weather />
-                      ) : ['createDocument', 'updateDocument', 'requestSuggestions'].includes(toolName) ? (
-                        <div className="text-muted-foreground text-sm">Processing...</div>
+                      ) : [
+                          'createDocument',
+                          'updateDocument',
+                          'requestSuggestions',
+                        ].includes(toolName) ? (
+                        <div className="text-muted-foreground text-sm">
+                          Processing...
+                        </div>
                       ) : null}
                     </div>
                   );
@@ -181,8 +187,14 @@ const PurePreviewMessage = ({
                     <div key={toolCallId}>
                       {toolName === 'getWeather' ? (
                         <Weather weatherAtLocation={result} />
-                      ) : ['createDocument', 'updateDocument', 'requestSuggestions'].includes(toolName) ? (
-                        <div className="text-muted-foreground text-sm">Completed</div>
+                      ) : [
+                          'createDocument',
+                          'updateDocument',
+                          'requestSuggestions',
+                        ].includes(toolName) ? (
+                        <div className="text-muted-foreground text-sm">
+                          Completed
+                        </div>
                       ) : (
                         <pre>{JSON.stringify(result, null, 2)}</pre>
                       )}

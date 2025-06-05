@@ -9,6 +9,8 @@ import {
   gt,
   gte,
   inArray,
+  isNull,
+  like,
   lt,
   type SQL,
 } from 'drizzle-orm';
@@ -116,6 +118,80 @@ export async function createOrUpdateGitHubUser({
       'bad_request:database',
       `Failed to create or update GitHub user: ${error instanceof Error ? error.message : 'Unknown error'}`,
     );
+  }
+}
+
+export async function upgradeGuestToGitHubUser({
+  guestUserId,
+  githubData,
+}: {
+  guestUserId: string;
+  githubData: {
+    email?: string | null;
+    githubId: string;
+    githubUsername: string;
+    avatarUrl: string;
+  };
+}) {
+  try {
+    // Check for conflicts with existing GitHub users
+    const existingGitHubUser = await db
+      .select()
+      .from(user)
+      .where(eq(user.githubId, githubData.githubId));
+
+    if (existingGitHubUser.length > 0) {
+      throw new ChatSDKError(
+        'bad_request:database',
+        'A user with this GitHub account already exists',
+      );
+    }
+
+    // Verify the guest user exists and is actually a guest
+    const [guestUser] = await db
+      .select()
+      .from(user)
+      .where(
+        and(
+          eq(user.id, guestUserId),
+          isNull(user.githubId), // Ensure it's actually a guest
+          like(user.email, 'guest-%'), // Additional safety check
+        ),
+      );
+
+    if (!guestUser) {
+      throw new ChatSDKError(
+        'not_found:database',
+        'Guest user not found or already upgraded',
+      );
+    }
+
+    // Update the guest user with GitHub data (preserving the UUID)
+    const [upgradedUser] = await db
+      .update(user)
+      .set({
+        email: githubData.email || guestUser.email, // Keep guest email as fallback
+        githubId: githubData.githubId,
+        githubUsername: githubData.githubUsername,
+        avatarUrl: githubData.avatarUrl,
+      })
+      .where(eq(user.id, guestUserId))
+      .returning({
+        id: user.id,
+        email: user.email,
+        githubId: user.githubId,
+        githubUsername: user.githubUsername,
+        avatarUrl: user.avatarUrl,
+      });
+
+    console.log(
+      `Successfully upgraded guest user ${guestUserId} to GitHub user ${githubData.githubUsername}`,
+    );
+
+    return upgradedUser;
+  } catch (error) {
+    console.error('Failed to upgrade guest user:', error);
+    throw error;
   }
 }
 

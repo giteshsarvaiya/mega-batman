@@ -1,9 +1,10 @@
 import NextAuth, { type DefaultSession } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import GitHub from 'next-auth/providers/github';
-import { createGuestUser } from '@/lib/db/queries';
+import { createGuestUser, upgradeGuestToGitHubUser } from '@/lib/db/queries';
 import { authConfig } from './auth.config';
 import type { DefaultJWT } from 'next-auth/jwt';
+import { cookies } from 'next/headers';
 
 export type UserType = 'guest' | 'regular';
 
@@ -95,21 +96,70 @@ export const {
             return false;
           }
 
-          // Create or update user with GitHub data
-          const { createOrUpdateGitHubUser } = await import('@/lib/db/queries');
+          // Check for guest upgrade cookie
+          const cookieStore = await cookies();
+          const guestUpgradeId = cookieStore.get('guest-upgrade-id')?.value;
 
-          const [dbUser] = await createOrUpdateGitHubUser({
+          const githubData = {
             email: profile.email, // Can be null, that's fine
             githubId: profile.id.toString(),
             githubUsername:
               typeof profile.login === 'string' ? profile.login : '',
             avatarUrl:
               typeof profile.avatar_url === 'string' ? profile.avatar_url : '',
-          });
+          };
 
-          // Update user object with database ID
-          user.id = dbUser.id;
-          user.type = 'regular';
+          if (guestUpgradeId) {
+            console.log(
+              'Found guest upgrade cookie, attempting to upgrade user:',
+              guestUpgradeId,
+            );
+
+            try {
+              // Attempt to upgrade the guest user
+              const upgradedUser = await upgradeGuestToGitHubUser({
+                guestUserId: guestUpgradeId as string,
+                githubData,
+              });
+
+              // Update user object with existing guest user ID
+              user.id = upgradedUser.id;
+              user.type = 'regular';
+
+              // Clear the upgrade cookie by setting maxAge to 0
+              cookieStore.set('guest-upgrade-id', '', { maxAge: 0 });
+
+              console.log('Successfully upgraded guest user to GitHub user');
+            } catch (upgradeError) {
+              // If upgrade fails (e.g., GitHub account already linked), fall back to normal flow
+              console.error(
+                'Failed to upgrade guest user, creating new user:',
+                upgradeError,
+              );
+
+              // Clear the cookie since upgrade failed by setting maxAge to 0
+              cookieStore.set('guest-upgrade-id', '', { maxAge: 0 });
+
+              const { createOrUpdateGitHubUser } = await import(
+                '@/lib/db/queries'
+              );
+              const [dbUser] = await createOrUpdateGitHubUser(githubData);
+
+              user.id = dbUser.id;
+              user.type = 'regular';
+            }
+          } else {
+            // Normal flow: create or update GitHub user
+            const { createOrUpdateGitHubUser } = await import(
+              '@/lib/db/queries'
+            );
+
+            const [dbUser] = await createOrUpdateGitHubUser(githubData);
+
+            // Update user object with database ID
+            user.id = dbUser.id;
+            user.type = 'regular';
+          }
         } catch (error) {
           console.error('Failed to create/update GitHub user:', error);
           return false; // Deny sign in on database error

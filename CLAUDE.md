@@ -89,3 +89,6 @@ This is a Next.js AI chatbot application using:
 - **Run `pnpm format` and `pnpm lint`** after implementing any granular part of functionality
 - **Avoid type safety compromises** - No ts-ignores or lint ignores, use proper typing instead
 - **Test incrementally** - Verify each step works before moving to the next
+
+### Git Workflow
+- Use gh cli when working with git stuff. If and when asked, make PRs using it too.
