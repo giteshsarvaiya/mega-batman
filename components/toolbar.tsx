@@ -527,7 +527,14 @@ export function ToolbarProvider({ children }: { children: React.ReactNode }) {
     React.useState<Map<string, boolean>>(new Map());
 
   // This is the internal state of the toolbar.
-  const [_open, _setOpen] = React.useState(false);
+  // Read from cookie if available, otherwise default to open
+  const getInitialState = () => {
+    if (typeof window === 'undefined') return true; // Default to open on server
+    const match = document.cookie.match(new RegExp(`(^| )${TOOLBAR_COOKIE_NAME}=([^;]+)`));
+    return match ? match[2] === 'true' : true; // Default to open if no cookie
+  };
+  
+  const [_open, _setOpen] = React.useState(getInitialState);
   const open = _open;
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
@@ -716,7 +723,7 @@ function ToolbarDesktop() {
           <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
             <div className="flex items-center gap-2">
               <Wrench className="size-4" />
-              <h2 className="text-base font-semibold">Toolbox</h2>
+              <h2 className="text-base font-semibold">Toolkits</h2>
             </div>
             <ToolbarTrigger />
           </div>
@@ -866,7 +873,7 @@ function ToolbarMobile() {
           <SheetHeader className="p-4 border-b">
             <div className="flex items-center gap-2">
               <Wrench className="size-4" />
-              <SheetTitle className="text-base">Toolbox</SheetTitle>
+              <SheetTitle className="text-base">Toolkits</SheetTitle>
             </div>
           </SheetHeader>
 
@@ -949,7 +956,7 @@ export function ToolbarTrigger() {
           </Button>
         </TooltipTrigger>
         <TooltipContent side="left" align="center">
-          Close Toolbox (⌘T)
+          Close Toolkits (⌘T)
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -971,10 +978,10 @@ export function ToolBarTrigger() {
               'h-10 px-4 order-5 md:ml-auto relative flex items-center gap-2',
               hasEnabledTools && 'animate-pulse',
             )}
-            aria-label="Toggle Toolbox"
+            aria-label="Toggle Toolkits"
           >
             {open ? <X className="size-5" /> : <Wrench className="size-5" />}
-            <span className="font-medium">Toolbox</span>
+            <span className="font-medium">Toolkits</span>
             {hasEnabledTools && !open && (
               <span className="absolute -top-1 -right-1 size-3 bg-green-500 rounded-full" />
             )}
@@ -982,10 +989,10 @@ export function ToolBarTrigger() {
         </TooltipTrigger>
         <TooltipContent side="left" align="center">
           {open
-            ? 'Close Toolbox'
+            ? 'Close Toolkits'
             : hasEnabledTools
-              ? `Open Toolbox (${enabledTools.size} active)`
-              : 'Open Toolbox'}{' '}
+              ? `Open Toolkits (${enabledTools.size} active)`
+              : 'Open Toolkits'}{' '}
           (⌘T)
         </TooltipContent>
       </Tooltip>
