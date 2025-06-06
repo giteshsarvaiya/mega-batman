@@ -2,7 +2,7 @@
 
 import type { Attachment, UIMessage } from 'ai';
 import { useChat } from '@ai-sdk/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { ChatHeader } from '@/components/chat-header';
 import type { Vote } from '@/lib/db/schema';
@@ -39,6 +39,12 @@ export function Chat({
 }) {
   const { mutate } = useSWRConfig();
   const { state: toolbarState } = useToolbarState();
+  
+  // Create a ref to always have the latest toolbar state
+  const toolbarStateRef = useRef(toolbarState);
+  useEffect(() => {
+    toolbarStateRef.current = toolbarState;
+  }, [toolbarState]);
 
   const { visibilityType } = useChatVisibility({
     chatId: id,
@@ -64,15 +70,21 @@ export function Chat({
     sendExtraMessageFields: true,
     generateId: generateUUID,
     fetch: fetchWithErrorHandlers,
-    experimental_prepareRequestBody: (body) => ({
-      id,
-      message: body.messages.at(-1),
-      selectedChatModel: initialChatModel,
-      selectedVisibilityType: visibilityType,
-      enabledToolkits: Array.from(
-        toolbarState.enabledToolkitsWithStatus.entries(),
-      ).map(([slug, isConnected]) => ({ slug, isConnected })),
-    }),
+    experimental_prepareRequestBody: (body) => {
+      // Always use the current toolbar state from the ref
+      const currentToolbarState = toolbarStateRef.current;
+      const enabledToolkits = Array.from(
+        currentToolbarState.enabledToolkitsWithStatus.entries(),
+      ).map(([slug, isConnected]) => ({ slug, isConnected }));
+      
+      return {
+        id,
+        message: body.messages.at(-1),
+        selectedChatModel: initialChatModel,
+        selectedVisibilityType: visibilityType,
+        enabledToolkits,
+      };
+    },
     onFinish: () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
