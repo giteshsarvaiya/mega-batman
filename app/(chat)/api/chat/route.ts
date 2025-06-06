@@ -149,12 +149,6 @@ export async function POST(request: Request) {
 
     const stream = createDataStream({
       execute: async (dataStream) => {
-        // Log enabled toolkits with connection status
-        console.log(
-          'Enabled toolkits with connection status:',
-          enabledToolkits,
-        );
-
         // Extract just the slugs for the getComposioTools function
         const toolkitSlugs = enabledToolkits?.map((t) => t.slug) || [];
 
