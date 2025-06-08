@@ -34,7 +34,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ExternalLink, Loader2, X, Wrench, Check, Trash2 } from 'lucide-react';
+import {
+  ExternalLink,
+  Loader2,
+  X,
+  LucideWrench,
+  Check,
+  Trash2,
+} from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -530,10 +537,12 @@ export function ToolbarProvider({ children }: { children: React.ReactNode }) {
   // Read from cookie if available, otherwise default to open
   const getInitialState = () => {
     if (typeof window === 'undefined') return true; // Default to open on server
-    const match = document.cookie.match(new RegExp(`(^| )${TOOLBAR_COOKIE_NAME}=([^;]+)`));
+    const match = document.cookie.match(
+      new RegExp(`(^| )${TOOLBAR_COOKIE_NAME}=([^;]+)`),
+    );
     return match ? match[2] === 'true' : true; // Default to open if no cookie
   };
-  
+
   const [_open, _setOpen] = React.useState(getInitialState);
   const open = _open;
   const setOpen = React.useCallback(
@@ -722,7 +731,7 @@ function ToolbarDesktop() {
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-sidebar-border">
             <div className="flex items-center gap-2">
-              <Wrench className="size-4" />
+              <LucideWrench className="size-4" />
               <h2 className="text-base font-semibold">Toolkits</h2>
             </div>
             <ToolbarTrigger />
@@ -872,7 +881,7 @@ function ToolbarMobile() {
         <div className="flex size-full flex-col">
           <SheetHeader className="p-4 border-b">
             <div className="flex items-center gap-2">
-              <Wrench className="size-4" />
+              <LucideWrench className="size-4" />
               <SheetTitle className="text-base">Toolkits</SheetTitle>
             </div>
           </SheetHeader>
@@ -980,7 +989,11 @@ export function ToolBarTrigger() {
             )}
             aria-label="Toggle Toolkits"
           >
-            {open ? <X className="size-5" /> : <Wrench className="size-5" />}
+            {open ? (
+              <X className="size-5" />
+            ) : (
+              <LucideWrench className="size-5" />
+            )}
             <span className="font-medium">Toolkits</span>
             {hasEnabledTools && !open && (
               <span className="absolute -top-1 -right-1 size-3 bg-green-500 rounded-full" />
