@@ -39,7 +39,7 @@ export function Chat({
 }) {
   const { mutate } = useSWRConfig();
   const { state: toolbarState } = useToolbarState();
-  
+
   // Create a ref to always have the latest toolbar state
   const toolbarStateRef = useRef(toolbarState);
   useEffect(() => {
@@ -76,7 +76,7 @@ export function Chat({
       const enabledToolkits = Array.from(
         currentToolbarState.enabledToolkitsWithStatus.entries(),
       ).map(([slug, isConnected]) => ({ slug, isConnected }));
-      
+
       return {
         id,
         message: body.messages.at(-1),

@@ -1,3 +1,5 @@
+import Image from 'next/image';
+
 export const BotIcon = () => {
   return (
     <svg
@@ -53,6 +55,29 @@ export const AttachmentIcon = () => {
         fill="currentColor"
       />
     </svg>
+  );
+};
+
+export const ComposioIcon = ({ size = 96 }) => {
+  return (
+    <div>
+      <Image
+        style={{ color: 'currentColor' }}
+        src="/assets/icons/composio-logo-light.svg"
+        alt="Composio logo"
+        width={size}
+        height={size}
+        className="block dark:hidden"
+      />
+      <Image
+        style={{ color: 'currentColor' }}
+        src="/assets/icons/composio-logo-dark.svg"
+        alt="Composio logo"
+        width={size}
+        height={size}
+        className="hidden dark:block"
+      />
+    </div>
   );
 };
 
