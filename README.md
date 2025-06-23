@@ -34,6 +34,12 @@
 - **[Auth.js](https://authjs.dev)** - Authentication system
 - **[shadcn/ui](https://ui.shadcn.com)** - UI components with Tailwind CSS
 
+## Deploy your own
+You can deploy your version with one click:
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FComposioHQ%2Fchat%2F&env=BLOB_READ_WRITE_TOKEN,COMPOSIO_API_KEY,NEXT_PUBLIC_COMPOSIO_AUTH_GITHUB,NEXT_PUBLIC_COMPOSIO_AUTH_GMAIL,NEXT_PUBLIC_COMPOSIO_AUTH_GOOGLECALENDAR,NEXT_PUBLIC_COMPOSIO_AUTH_LINEAR,NEXT_PUBLIC_COMPOSIO_AUTH_NOTION,NEXT_PUBLIC_COMPOSIO_AUTH_SLACK,VERCEL_OIDC_TOKEN&envDescription=Learn%20more%20about%20how%20to%20get%20the%20API%20Keys%20for%20the%20application&envLink=https%3A%2F%2Fgithub.com%2Fcomposiohq%2Fchat%2Fblob%2Fmain%2F.env.example&demo-title=Composio%20Chat&demo-description=A%20working%20full-stack%20agentic%20chat%20app%20built%20with%20Composio%20and%20Vercel%20AI%20SDK.&demo-url=https%3A%2F%2Fchat.composio.dev)
+
+
 ## Running locally
 
 ### Prerequisites
