@@ -1,4 +1,4 @@
-<a href="https://composio.dev">
+<a href="https://chat.composio.dev">
   <img alt="Composio AI Chatbot Template" src="https://og.composio.dev/api/og?title=chat.composio.dev">
   <h1 align="center">Composio AI Chatbot Template</h1>
 </a>
