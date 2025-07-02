@@ -66,7 +66,7 @@ You can deploy your version with one click:
 3. **Set up environment variables**
 
    ```bash
-   cp .env.example .env
+   cp .env.example .env.local
    ```
 
    Add your configuration:
