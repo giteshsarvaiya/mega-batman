@@ -1,15 +1,29 @@
 import { Toaster } from 'sonner';
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
+
 
 import './globals.css';
 import { SessionProvider } from 'next-auth/react';
 
+import { Inter, Roboto_Mono } from 'next/font/google';
+
+const geist = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-geist',
+});
+
+const geistMono = Roboto_Mono({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-geist-mono',
+});
+
 export const metadata: Metadata = {
-  metadataBase: new URL('https://chat.composio.dev'),
-  title: 'Composio AI Chat',
-  description: 'AI-powered chat application with 300+ app integrations via Composio.',
+  // metadataBase: new URL(''),
+  title: 'Agent-Flow AI Chat',
+  description: 'AI-powered chat application with your favourite applications integrated in it.',
 };
 
 export const viewport = {
