@@ -29,9 +29,11 @@ const SUPPORTED_TOOLKITS = [
   'GMAIL',
   'GOOGLECALENDAR',
   'GITHUB',
-  'NOTION',
-  'SLACK',
-  'LINEAR',
+  'JIRA',
+  'CONFLUENCE',
+  'OUTLOOK',
+  'MICROSOFT_TEAMS',
+  'GOOGLESHEETS',
 ];
 
 export async function GET() {

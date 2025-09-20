@@ -42,6 +42,32 @@ export default function Page() {
     }
   };
 
+  const handleGoogleSignIn = () => {
+    // If current user is a guest, show confirmation
+    if (session?.user?.type === 'guest' && session.user.id) {
+      const confirmLink = window.confirm(
+        'Linking your Google account will preserve your current chat history ' +
+          'and allow you to access it from any device. Your guest account will ' +
+          'be upgraded to a full account.\n\n' +
+          'Do you want to continue?',
+      );
+
+      if (confirmLink) {
+        // Store guest ID for the upgrade process
+        setCookie('guest-upgrade-id', session.user.id, {
+          maxAge: 60 * 5, // 5 minutes - enough time for OAuth flow
+          sameSite: 'lax',
+          secure: process.env.NODE_ENV === 'production',
+        });
+
+        signIn('google', { callbackUrl: '/' });
+      }
+    } else {
+      // Regular Google sign-in for non-guest users
+      signIn('google', { callbackUrl: '/' });
+    }
+  };
+
   const handleGuestSignIn = () => {
     signIn('guest', { callbackUrl: '/' });
   };
@@ -62,6 +88,11 @@ export default function Page() {
             {session?.user?.type === 'guest'
               ? 'Link GitHub Account'
               : 'Continue with GitHub'}
+          </Button>
+          <Button onClick={handleGoogleSignIn} className="w-full" size="lg" variant="outline">
+            {session?.user?.type === 'guest'
+              ? 'Link Google Account'
+              : 'Continue with Google'}
           </Button>
           <Button
             onClick={handleGuestSignIn}

@@ -121,6 +121,66 @@ export async function createOrUpdateGitHubUser({
   }
 }
 
+export async function createOrUpdateGoogleUser({
+  email,
+  googleId,
+  googleUsername,
+  avatarUrl,
+}: {
+  email?: string | null;
+  googleId: string;
+  googleUsername: string;
+  avatarUrl: string;
+}) {
+  try {
+    // First try to find existing user by Google ID
+    const existingUser = await db
+      .select()
+      .from(user)
+      .where(eq(user.googleId, googleId));
+
+    if (existingUser.length > 0) {
+      // Update existing user
+      return await db
+        .update(user)
+        .set({ email, googleUsername, avatarUrl })
+        .where(eq(user.googleId, googleId))
+        .returning({
+          id: user.id,
+          email: user.email,
+          googleId: user.googleId,
+          googleUsername: user.googleUsername,
+          avatarUrl: user.avatarUrl,
+        });
+    } else {
+      // Create new user - use Google username as email fallback
+      const fallbackEmail = email || `${googleUsername}@google.local`;
+      return await db
+        .insert(user)
+        .values({
+          email: fallbackEmail,
+          password: null,
+          googleId,
+          googleUsername,
+          avatarUrl,
+        })
+        .returning({
+          id: user.id,
+          email: user.email,
+          googleId: user.googleId,
+          googleUsername: user.googleUsername,
+          avatarUrl: user.avatarUrl,
+        });
+    }
+  } catch (error) {
+    console.error('Database error in createOrUpdateGoogleUser:', error);
+    throw new ChatSDKError(
+      'bad_request:database',
+      `Failed to create or update Google user: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    );
+  }
+}
+
 export async function upgradeGuestToGitHubUser({
   guestUserId,
   githubData,
@@ -186,6 +246,80 @@ export async function upgradeGuestToGitHubUser({
 
     console.log(
       `Successfully upgraded guest user ${guestUserId} to GitHub user ${githubData.githubUsername}`,
+    );
+
+    return upgradedUser;
+  } catch (error) {
+    console.error('Failed to upgrade guest user:', error);
+    throw error;
+  }
+}
+
+export async function upgradeGuestToGoogleUser({
+  guestUserId,
+  googleData,
+}: {
+  guestUserId: string;
+  googleData: {
+    email?: string | null;
+    googleId: string;
+    googleUsername: string;
+    avatarUrl: string;
+  };
+}) {
+  try {
+    // Check for conflicts with existing Google users
+    const existingGoogleUser = await db
+      .select()
+      .from(user)
+      .where(eq(user.googleId, googleData.googleId));
+
+    if (existingGoogleUser.length > 0) {
+      throw new ChatSDKError(
+        'bad_request:database',
+        'A user with this Google account already exists',
+      );
+    }
+
+    // Verify the guest user exists and is actually a guest
+    const [guestUser] = await db
+      .select()
+      .from(user)
+      .where(
+        and(
+          eq(user.id, guestUserId),
+          isNull(user.googleId), // Ensure it's actually a guest
+          like(user.email, 'guest-%'), // Additional safety check
+        ),
+      );
+
+    if (!guestUser) {
+      throw new ChatSDKError(
+        'not_found:database',
+        'Guest user not found or already upgraded',
+      );
+    }
+
+    // Update the guest user with Google data (preserving the UUID)
+    const [upgradedUser] = await db
+      .update(user)
+      .set({
+        email: googleData.email || guestUser.email, // Keep guest email as fallback
+        googleId: googleData.googleId,
+        googleUsername: googleData.googleUsername,
+        avatarUrl: googleData.avatarUrl,
+      })
+      .where(eq(user.id, guestUserId))
+      .returning({
+        id: user.id,
+        email: user.email,
+        googleId: user.googleId,
+        googleUsername: user.googleUsername,
+        avatarUrl: user.avatarUrl,
+      });
+
+    console.log(
+      `Successfully upgraded guest user ${guestUserId} to Google user ${googleData.googleUsername}`,
     );
 
     return upgradedUser;

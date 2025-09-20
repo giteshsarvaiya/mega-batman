@@ -17,6 +17,8 @@ export const user = pgTable('User', {
   password: varchar('password', { length: 64 }),
   githubId: varchar('github_id', { length: 64 }).unique(),
   githubUsername: varchar('github_username', { length: 64 }),
+  googleId: varchar('google_id', { length: 64 }).unique(),
+  googleUsername: varchar('google_username', { length: 64 }),
   avatarUrl: text('avatar_url'),
 });
 

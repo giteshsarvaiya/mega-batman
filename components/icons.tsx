@@ -60,23 +60,26 @@ export const AttachmentIcon = () => {
 
 export const ComposioIcon = ({ size = 96 }) => {
   return (
+    // <div>
+    //   <Image
+    //     style={{ color: 'currentColor' }}
+    //     src="/assets/icons/composio-logo-light.svg"
+    //     alt="Composio logo"
+    //     width={size}
+    //     height={size}
+    //     className="block dark:hidden"
+    //   />
+    //   <Image
+    //     style={{ color: 'currentColor' }}
+    //     src="/assets/icons/composio-logo-dark.svg"
+    //     alt="Composio logo"
+    //     width={size}
+    //     height={size}
+    //     className="hidden dark:block"
+    //   />
+    // </div>
     <div>
-      <Image
-        style={{ color: 'currentColor' }}
-        src="/assets/icons/composio-logo-light.svg"
-        alt="Composio logo"
-        width={size}
-        height={size}
-        className="block dark:hidden"
-      />
-      <Image
-        style={{ color: 'currentColor' }}
-        src="/assets/icons/composio-logo-dark.svg"
-        alt="Composio logo"
-        width={size}
-        height={size}
-        className="hidden dark:block"
-      />
+      <p className="text-xl font-bold text-black dark:text-white">AgentFlow</p>
     </div>
   );
 };

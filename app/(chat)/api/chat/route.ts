@@ -150,13 +150,26 @@ export async function POST(request: Request) {
     const stream = createDataStream({
       execute: async (dataStream) => {
         // Extract just the slugs for the getComposioTools function
-        const toolkitSlugs = enabledToolkits?.map((t) => t.slug) || [];
+        // Only include toolkits that are both enabled AND connected
+        const toolkitSlugs = enabledToolkits
+          ?.filter((t) => t.isConnected)
+          ?.map((t) => t.slug) || [];
+
+        // Debug logging
+        console.log('=== DEBUG INFO ===');
+        console.log('Enabled toolkits:', enabledToolkits);
+        console.log('Filtered toolkit slugs:', toolkitSlugs);
+        console.log('User ID:', session.user.id);
 
         // Fetch Composio tools if toolkits are enabled
         const composioTools = await getComposioTools(
           session.user.id,
           toolkitSlugs,
         );
+
+        // Debug logging
+        console.log('Composio tools loaded:', Object.keys(composioTools));
+        console.log('==================');
 
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
