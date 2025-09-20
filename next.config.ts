@@ -2,7 +2,7 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   experimental: {
-    ppr: true,
+    // ppr: true, // Disabled - requires Next.js canary
   },
   images: {
     remotePatterns: [
