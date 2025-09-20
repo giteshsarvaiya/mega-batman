@@ -29,7 +29,7 @@ import {
   createResumableStreamContext,
   type ResumableStreamContext,
 } from 'resumable-stream';
-import { after } from 'next/server';
+// import { after } from 'next/server';
 import type { Chat } from '@/lib/db/schema';
 import { differenceInSeconds } from 'date-fns';
 import { ChatSDKError } from '@/lib/errors';
@@ -43,7 +43,10 @@ function getStreamContext() {
   if (!globalStreamContext) {
     try {
       globalStreamContext = createResumableStreamContext({
-        waitUntil: after,
+        waitUntil: async (fn: () => Promise<void>) => {
+          // Fire-and-forget: run fn without blocking
+          fn().catch(console.error);
+        },
       });
     } catch (error: any) {
       if (error.message.includes('REDIS_URL')) {
