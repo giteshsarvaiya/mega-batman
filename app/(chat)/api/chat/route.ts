@@ -43,9 +43,9 @@ function getStreamContext() {
   if (!globalStreamContext) {
     try {
       globalStreamContext = createResumableStreamContext({
-        waitUntil: async (fn: () => Promise<void>) => {
-          // Fire-and-forget: run fn without blocking
-          fn().catch(console.error);
+        waitUntil:  (promise: Promise<unknown>) => {
+          // Fire-and-forget: run without blocking
+          promise.catch(console.error);
         },
       });
     } catch (error: any) {
