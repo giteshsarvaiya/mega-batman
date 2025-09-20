@@ -19,14 +19,9 @@ function PureSuggestedActions({
 }: SuggestedActionsProps) {
   const suggestedActions = [
     {
-      title: "Read my last 5 emails",
+      title: "Read my last 5 Gmail emails",
       label: "and summarize them.",
       action: "Read my last 5 emails and summarize them.",
-    },
-    {
-      title: "Star the repository `composiohq/composio`",
-      label: `on GitHub`,
-      action: `Star the repository \`composiohq/composio\` on GitHub`,
     },
     {
       title: "What issues are assigned to me",
@@ -34,39 +29,44 @@ function PureSuggestedActions({
       action: `What issues are assigned to me in Jira. Order by projects.`,
     },
     {
-      title: "Fetch my Outlook details",
-      label: "using the Outlook tool.",
-      action: "Fetch my Outlook details using the Outlook tool.",
+      title: "check if I am free in google calendar",
+      label: "and fix a meeting with Gitesh(gitesh@innovunglobal.com) on 22nd September 2025 at 10:00 AM",
+      action: "Check if I am free in google calendar and fix a meeting with Gitesh(gitesh@innovunglobal.com).",
     },
     {
-      title: "Fetch my Teams details",
-      label: "using the Teams tool.",
-      action: "Fetch my Teams details using the Teams tool.",
+      title: "Fetch my 5 upcoming Google Calendar events",
+      label: "and summarize them.",
+      action: "Fetch my Google Calendar upcoming events and summarize them.",
     },
     {
-      title: "Fetch my Jira details",
-      label: "using the Jira tool.",
-      action: "Fetch my Jira details using the Jira tool.",
+      title: "Fetch my last 5 Outlook emails",
+      label: "and summarize them.",
+      action: "Fetch my Outlook emails and summarize them.",
     },
     {
-      title: "Fetch my Confluence details",
-      label: "using the Confluence tool.",
-      action: "Fetch my Confluence details using the Confluence tool.",
+      title: "Show my Teams meetings",
+      label: "and upcoming events.",
+      action: "Show my Teams meetings and upcoming events.",
     },
     {
-      title: "Fetch my Google Calendar details",
-      label: "using the Google Calendar tool.",
-      action: "Fetch my Google Calendar details using the Google Calendar tool.",
+      title: "List my Jira issues",
+      label: "assigned to me, grouped by project.",
+      action: "List my Jira issues assigned to me, grouped by project.",
     },
     {
-      title: "Fetch my GitHub details",
-      label: "using the GitHub tool.",
-      action: "Fetch my GitHub details using the GitHub tool.",
+      title: "Show my Confluence pages",
+      label: "recently updated or created.",
+      action: "Show my Confluence pages recently updated or created.",
     },
     {
-      title: "Fetch my Gmail details",
-      label: "using the Gmail tool.",
-      action: "Fetch my Gmail details using the Gmail tool.",
+      title: "List my Google Calendar events",
+      label: "for this week.",
+      action: "List my Google Calendar events for this week.",
+    },
+    {
+      title: "Show my GitHub repositories",
+      label: "and recent commits.",
+      action: "Show my GitHub repositories and recent commits.",
     },
   ];
 
