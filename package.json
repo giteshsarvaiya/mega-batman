@@ -1,6 +1,6 @@
 {
-  "name": "composio-chat",
-  "version": "3.0.23",
+  "name": "agent-flow-ai-chat",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
