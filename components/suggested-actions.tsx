@@ -21,7 +21,7 @@ function PureSuggestedActions({
     {
       title: "Read my last 5 Gmail emails",
       label: "and summarize them.",
-      action: "Read my last 5 emails and summarize them.",
+      action: "Read my last 5 Gmail emails and summarize them.",
     },
     {
       title: "What issues are assigned to me",
@@ -30,8 +30,8 @@ function PureSuggestedActions({
     },
     {
       title: "check if I am free in google calendar",
-      label: "and fix a meeting with Gitesh(gitesh@innovunglobal.com) on 22nd September 2025 at 10:00 AM",
-      action: "Check if I am free in google calendar and fix a meeting with Gitesh(gitesh@innovunglobal.com).",
+      label: "and fix a meeting with Gitesh(gitesh@innovunglobal.com)",
+      action: "Check if I am free in google calendar and fix a meeting with Gitesh(gitesh@innovunglobal.com)  on 22nd September 2025 at 10:00 AM",
     },
     {
       title: "Fetch my 5 upcoming Google Calendar events",

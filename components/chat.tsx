@@ -2,7 +2,7 @@
 
 import type { Attachment, UIMessage } from 'ai';
 import { useChat } from '@ai-sdk/react';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { ChatHeader } from '@/components/chat-header';
 import type { Vote } from '@/lib/db/schema';
@@ -37,19 +37,147 @@ export function Chat({
   session: Session;
   autoResume: boolean;
 }) {
+  console.log('🛠️ Chat component rendered with id:', id);
   const { mutate } = useSWRConfig();
-  const { state: toolbarState } = useToolbarState();
-
-  // Create a ref to always have the latest toolbar state
-  const toolbarStateRef = useRef(toolbarState);
-  useEffect(() => {
-    toolbarStateRef.current = toolbarState;
-  }, [toolbarState]);
 
   const { visibilityType } = useChatVisibility({
     chatId: id,
     initialVisibilityType,
   });
+
+  const [enabledToolkits, setEnabledToolkits] = useState<Array<{ slug: string; isConnected: boolean }>>([]);
+  const [toolkitsLoaded, setToolkitsLoaded] = useState(false);
+  
+  console.log('🛠️ Chat component state - enabledToolkits:', enabledToolkits, 'toolkitsLoaded:', toolkitsLoaded);
+
+  // Manual test - if toolkits not loaded after 2 seconds, try to fetch manually
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!toolkitsLoaded) {
+        console.log('🛠️ Manual fetch triggered - toolkits not loaded after 2 seconds');
+        const manualFetch = async () => {
+          try {
+            const response = await fetch('/api/toolkits');
+            if (response.ok) {
+              const { toolkits } = await response.json();
+              const connectedToolkits = toolkits
+                .filter((toolkit: any) => toolkit.isConnected)
+                .map((toolkit: any) => ({
+                  slug: toolkit.slug,
+                  isConnected: toolkit.isConnected,
+                }));
+              setEnabledToolkits(connectedToolkits);
+              setToolkitsLoaded(true);
+              console.log('🛠️ Manual fetch: Enabled toolkits loaded:', connectedToolkits);
+            }
+          } catch (error) {
+            console.error('Manual fetch: Failed to fetch enabled toolkits:', error);
+          }
+        };
+        manualFetch();
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [toolkitsLoaded]);
+
+  // Fetch enabled toolkits immediately on mount
+  useLayoutEffect(() => {
+    console.log('🛠️ useLayoutEffect triggered - fetching enabled toolkits...');
+    
+    const fetchEnabledToolkits = async () => {
+      try {
+        console.log('🛠️ Fetching enabled toolkits on mount...');
+        const response = await fetch('/api/toolkits');
+        console.log('🛠️ Fetch response status:', response.status, response.ok);
+        
+        if (response.ok) {
+          const { toolkits } = await response.json();
+          console.log('🔍 Frontend received toolkits from /api/toolkits:', toolkits.map((t: any) => ({ slug: t.slug, name: t.name, isConnected: t.isConnected })));
+          
+          const connectedToolkits = toolkits
+            .filter((toolkit: any) => toolkit.isConnected)
+            .map((toolkit: any) => ({
+              slug: toolkit.slug,
+              isConnected: toolkit.isConnected,
+            }));
+          
+          console.log('🛠️ Filtered connected toolkits:', connectedToolkits);
+          setEnabledToolkits(connectedToolkits);
+          setToolkitsLoaded(true);
+          console.log('🛠️ Enabled toolkits loaded:', connectedToolkits);
+          console.log('🛠️ Enabled toolkits count:', connectedToolkits.length);
+        } else {
+          console.error('Failed to fetch toolkits, response not ok:', response.status);
+          setToolkitsLoaded(true);
+        }
+      } catch (error) {
+        console.error('Failed to fetch enabled toolkits:', error);
+        setToolkitsLoaded(true); // Still mark as loaded to prevent infinite waiting
+      }
+    };
+
+    fetchEnabledToolkits();
+  }, []);
+
+  // Fallback useEffect in case useLayoutEffect doesn't work
+  useEffect(() => {
+    if (!toolkitsLoaded) {
+      console.log('🛠️ Fallback useEffect triggered - toolkits not loaded yet');
+      const fetchEnabledToolkits = async () => {
+        try {
+          console.log('🛠️ Fallback: Fetching enabled toolkits...');
+          const response = await fetch('/api/toolkits');
+          if (response.ok) {
+            const { toolkits } = await response.json();
+            const connectedToolkits = toolkits
+              .filter((toolkit: any) => toolkit.isConnected)
+              .map((toolkit: any) => ({
+                slug: toolkit.slug,
+                isConnected: toolkit.isConnected,
+              }));
+            setEnabledToolkits(connectedToolkits);
+            setToolkitsLoaded(true);
+            console.log('🛠️ Fallback: Enabled toolkits loaded:', connectedToolkits);
+          }
+        } catch (error) {
+          console.error('Fallback: Failed to fetch enabled toolkits:', error);
+          setToolkitsLoaded(true);
+        }
+      };
+      fetchEnabledToolkits();
+    }
+  }, [toolkitsLoaded]);
+
+  // Listen for tool connection events to refresh enabled toolkits
+  useEffect(() => {
+    const handleToolConnected = () => {
+      console.log('🔄 Tool connected, refreshing enabled toolkits...');
+      // Refresh the enabled toolkits when a tool is connected
+      const refreshToolkits = async () => {
+        try {
+          const response = await fetch('/api/toolkits');
+          if (response.ok) {
+            const { toolkits } = await response.json();
+            const connectedToolkits = toolkits
+              .filter((toolkit: any) => toolkit.isConnected)
+              .map((toolkit: any) => ({
+                slug: toolkit.slug,
+                isConnected: toolkit.isConnected,
+              }));
+            setEnabledToolkits(connectedToolkits);
+            console.log('🛠️ Refreshed enabled toolkits:', connectedToolkits);
+          }
+        } catch (error) {
+          console.error('Failed to refresh enabled toolkits:', error);
+        }
+      };
+      refreshToolkits();
+    };
+
+    window.addEventListener('toolConnected', handleToolConnected);
+    return () => window.removeEventListener('toolConnected', handleToolConnected);
+  }, []);
 
   const {
     messages,
@@ -71,19 +199,24 @@ export function Chat({
     generateId: generateUUID,
     fetch: fetchWithErrorHandlers,
     experimental_prepareRequestBody: (body) => {
-      // Always use the current toolbar state from the ref
-      const currentToolbarState = toolbarStateRef.current;
-      const enabledToolkits = Array.from(
-        currentToolbarState.enabledToolkitsWithStatus.entries(),
-      ).map(([slug, isConnected]) => ({ slug, isConnected }));
-
-      return {
+      console.log('🛠️ Preparing request body with enabledToolkits:', enabledToolkits, 'toolkitsLoaded:', toolkitsLoaded);
+      console.log('🛠️ Enabled toolkits details:', enabledToolkits.map(t => `${t.slug}:${t.isConnected}`));
+      
+      // If toolkits haven't loaded yet, log a warning but proceed
+      if (!toolkitsLoaded) {
+        console.warn('⚠️ Toolkits not loaded yet, proceeding with empty enabledToolkits');
+      }
+      
+      const requestBody = {
         id,
         message: body.messages.at(-1),
         selectedChatModel: initialChatModel,
         selectedVisibilityType: visibilityType,
         enabledToolkits,
       };
+      
+      console.log('🛠️ Final request body enabledToolkits:', requestBody.enabledToolkits);
+      return requestBody;
     },
     onFinish: () => {
       console.log('✅ Chat onFinish called');

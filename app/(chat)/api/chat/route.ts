@@ -6,7 +6,7 @@ import {
   streamText,
 } from 'ai';
 import { auth, type UserType } from '@/app/(auth)/auth';
-import { type RequestHints, systemPrompt } from '@/lib/ai/prompts';
+import { type RequestHints, systemPrompt, type ToolInfo } from '@/lib/ai/prompts';
 import {
   createStreamId,
   deleteChatById,
@@ -156,9 +156,14 @@ export async function POST(request: Request) {
     const previousMessages = await getMessagesByChatId({ id });
     console.log('📋 Previous messages count:', previousMessages.length);
 
+    // Limit messages to prevent token limit exceeded error
+    // Keep only the last 10 messages to stay within token limits
+    const limitedPreviousMessages = previousMessages.slice(-10);
+    console.log('📝 Limited previous messages count:', limitedPreviousMessages.length);
+
     const messages = appendClientMessage({
       // @ts-expect-error: todo add type conversion from DBMessage[] to UIMessage[]
-      messages: previousMessages,
+      messages: limitedPreviousMessages,
       message,
     });
     console.log('📝 Total messages for AI:', messages.length);
@@ -173,19 +178,53 @@ export async function POST(request: Request) {
     };
 
     console.log('💾 Saving user message...');
-    await saveMessages({
-      messages: [
-        {
-          chatId: id,
-          id: message.id,
-          role: 'user',
-          parts: message.parts,
-          attachments: message.experimental_attachments ?? [],
-          createdAt: new Date(),
-        },
-      ],
-    });
-    console.log('✅ User message saved');
+    try {
+      // Validate and format user message parts
+      const formattedUserParts = message.parts?.map(part => {
+        if (part.type === 'text') {
+          return { type: 'text', text: part.text || '' };
+        }
+        return part;
+      }) || [];
+
+      console.log('📝 User message parts:', {
+        originalParts: message.parts?.length,
+        formattedParts: formattedUserParts.length,
+        firstPart: formattedUserParts[0],
+      });
+
+      // Check if message with this ID already exists
+      const existingMessages = await getMessagesByChatId({ id });
+      const messageExists = existingMessages.some(msg => msg.id === message.id);
+      
+      if (messageExists) {
+        console.log('⚠️ Message with ID already exists, skipping save:', message.id);
+      } else {
+        await saveMessages({
+          messages: [
+            {
+              chatId: id,
+              id: message.id,
+              role: 'user',
+              parts: formattedUserParts,
+              attachments: message.experimental_attachments ?? [],
+              createdAt: new Date(),
+            },
+          ],
+        });
+        console.log('✅ User message saved');
+      }
+    } catch (error) {
+      console.error('❌ Failed to save user message:', error);
+      console.error('❌ User message error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        chatId: id,
+        messageId: message.id,
+        role: 'user',
+        partsLength: message.parts?.length,
+      });
+      // Don't throw here, continue with the stream
+    }
 
     const streamId = generateUUID();
     console.log('🆔 Generated stream ID:', streamId);
@@ -197,15 +236,51 @@ export async function POST(request: Request) {
       execute: async (dataStream) => {
         console.log('🚀 Stream execution started');
         
-        // Extract just the slugs for the getComposioTools function
-        const toolkitSlugs = enabledToolkits?.map((t) => t.slug) || [];
-        console.log('🛠️ Toolkit slugs:', toolkitSlugs);
+        // Fetch toolkits data once for both Composio tools and system prompt
+        console.log('🔧 Fetching toolkits data...');
+        let availableTools: ToolInfo[] = [];
+        let connectedToolkitSlugs: string[] = [];
+        
+        try {
+          const toolkitsResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/toolkits`, {
+            headers: {
+              'Cookie': request.headers.get('cookie') || '',
+            },
+          });
+          
+          if (toolkitsResponse.ok) {
+            const { toolkits } = await toolkitsResponse.json();
+            console.log('🔍 Raw toolkits response from /api/toolkits:', toolkits.map((t: any) => ({ slug: t.slug, name: t.name, isConnected: t.isConnected })));
+            
+            // Prepare tools for system prompt (all tools with connection status)
+            availableTools = toolkits
+              .map((toolkit: any) => ({
+                name: toolkit.name,
+                slug: toolkit.slug,
+                description: toolkit.description,
+                isConnected: toolkit.isConnected,
+              }));
+            
+            // Get connected toolkit slugs for Composio tools
+            connectedToolkitSlugs = toolkits
+              .filter((toolkit: any) => toolkit.isConnected)
+              .map((toolkit: any) => toolkit.slug);
+            
+            console.log('✅ Available tools fetched:', availableTools.length, 'tools');
+            console.log('🔧 All tools:', availableTools.map(t => ({ slug: t.slug, name: t.name, isConnected: t.isConnected })));
+            console.log('🔧 Connected tools:', availableTools.filter(t => t.isConnected).map(t => t.slug));
+            console.log('🔧 Disconnected tools:', availableTools.filter(t => !t.isConnected).map(t => t.slug));
+            console.log('🛠️ Connected toolkit slugs for Composio:', connectedToolkitSlugs);
+          }
+        } catch (error) {
+          console.error('Failed to fetch toolkits:', error);
+        }
 
-        // Fetch Composio tools if toolkits are enabled
-        console.log('🔧 Fetching Composio tools...');
+        // Fetch Composio tools for connected toolkits only
+        console.log('🔧 Fetching Composio tools for connected toolkits...');
         const composioTools = await getComposioTools(
           session.user.id,
-          toolkitSlugs,
+          connectedToolkitSlugs,
         );
         console.log('✅ Composio tools fetched:', Object.keys(composioTools).length, 'tools');
 
@@ -221,9 +296,12 @@ export async function POST(request: Request) {
           throw new Error('ANTHROPIC_API_KEY environment variable is required');
         }
         
+        // For now, let's pass all available tools to see what the AI is actually seeing
+        console.log('🤖 Using all available tools for system prompt:', availableTools.map(t => ({ slug: t.slug, isConnected: t.isConnected })));
+        
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
-          system: systemPrompt({ selectedChatModel, requestHints }),
+          system: systemPrompt({ selectedChatModel, requestHints, availableTools }),
           messages,
           maxSteps: 5,
           experimental_transform: smoothStream({ chunking: 'word' }),
@@ -255,13 +333,27 @@ export async function POST(request: Request) {
                   responseMessages: response.messages,
                 });
 
+                // Validate and format message parts
+                const formattedParts = assistantMessage.parts?.map(part => {
+                  if (part.type === 'text') {
+                    return { type: 'text', text: part.text || '' };
+                  }
+                  return part;
+                }) || [];
+
+                console.log('📝 Assistant message parts:', {
+                  originalParts: assistantMessage.parts?.length,
+                  formattedParts: formattedParts.length,
+                  firstPart: formattedParts[0],
+                });
+
                 await saveMessages({
                   messages: [
                     {
                       id: assistantId,
                       chatId: id,
                       role: assistantMessage.role,
-                      parts: assistantMessage.parts,
+                      parts: formattedParts,
                       attachments:
                         assistantMessage.experimental_attachments ?? [],
                       createdAt: new Date(),
@@ -271,6 +363,16 @@ export async function POST(request: Request) {
                 console.log('✅ Assistant message saved to database');
               } catch (error) {
                 console.error('❌ Failed to save assistant message:', error);
+                console.error('❌ Error details:', {
+                  message: error instanceof Error ? error.message : 'Unknown error',
+                  stack: error instanceof Error ? error.stack : undefined,
+                  assistantId,
+                  chatId: id,
+                  role: assistantMessage?.role,
+                  partsLength: assistantMessage?.parts?.length,
+                });
+                // Continue execution - don't let database errors break the chat
+                console.log('⚠️ Continuing despite database save failure');
               }
             } else {
               console.log('⚠️ No session user ID, skipping assistant message save');

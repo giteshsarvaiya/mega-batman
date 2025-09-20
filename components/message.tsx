@@ -3,7 +3,7 @@
 import type { UIMessage } from 'ai';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
-import { memo, useState } from 'react';
+import { memo, useState, useEffect } from 'react';
 import type { Vote } from '@/lib/db/schema';
 import { PencilEditIcon, SparklesIcon } from './icons';
 import { Markdown } from './markdown';
@@ -17,6 +17,9 @@ import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { MessageEditor } from './message-editor';
 import { MessageReasoning } from './message-reasoning';
+import { ToolActivation } from './tool-activation';
+import { parseToolActivationMessage, hasToolActivationRequirements } from '@/lib/tool-activation-parser';
+import { useToolbar } from './toolbar';
 import type { UseChatHelpers } from '@ai-sdk/react';
 
 const PurePreviewMessage = ({
@@ -39,6 +42,41 @@ const PurePreviewMessage = ({
   requiresScrollPadding: boolean;
 }) => {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const [availableTools, setAvailableTools] = useState<any[]>([]);
+  const [showToolActivation, setShowToolActivation] = useState(false);
+
+  // Fetch available tools when component mounts
+  useEffect(() => {
+    const fetchAvailableTools = async () => {
+      try {
+        const response = await fetch('/api/toolkits');
+        if (response.ok) {
+          const { toolkits } = await response.json();
+          setAvailableTools(toolkits);
+        }
+      } catch (error) {
+        console.error('Failed to fetch available tools:', error);
+      }
+    };
+
+    fetchAvailableTools();
+  }, []);
+
+  // Check if message contains tool activation requirements
+  const toolActivationData = message.role === 'assistant' && message.content 
+    ? parseToolActivationMessage(message.content, availableTools)
+    : null;
+
+  // Only show tool activation when AI specifically requests tool connection
+  const shouldShowToolActivation = message.role === 'assistant' && !!toolActivationData;
+
+  // Extract original query from the previous user message
+  const getOriginalQuery = () => {
+    // This is a simplified approach - in a real implementation, you might want to
+    // pass the messages array or find the last user message
+    return "Your previous request"; // Placeholder for now
+  };
+
 
   return (
     <AnimatePresence>
@@ -129,7 +167,41 @@ const PurePreviewMessage = ({
                             message.role === 'user',
                         })}
                       >
-                        <Markdown>{sanitizeText(part.text)}</Markdown>
+                        {toolActivationData ? (
+                          <>
+                            <Markdown>{sanitizeText(toolActivationData.message)}</Markdown>
+                            <ToolActivation
+                              requiredTools={toolActivationData.requiredTools}
+                              onToolConnected={(toolSlug) => {
+                                console.log('Tool connected:', toolSlug);
+                                // Optionally reload the chat or refresh tool status
+                                reload();
+                              }}
+                              onRetryQuery={() => {
+                                // Reload the chat to retry the last user message
+                                reload();
+                              }}
+                              originalQuery={getOriginalQuery()}
+                            />
+                          </>
+                        ) : shouldShowToolActivation && toolActivationData ? (
+                          <>
+                            <Markdown>{sanitizeText(part.text)}</Markdown>
+                            <ToolActivation
+                              requiredTools={toolActivationData.requiredTools}
+                              onToolConnected={(toolSlug) => {
+                                console.log('Tool connected:', toolSlug);
+                                reload();
+                              }}
+                              onRetryQuery={() => {
+                                reload();
+                              }}
+                              originalQuery={getOriginalQuery()}
+                            />
+                          </>
+                        ) : (
+                          <Markdown>{sanitizeText(part.text)}</Markdown>
+                        )}
                       </div>
                     </div>
                   );

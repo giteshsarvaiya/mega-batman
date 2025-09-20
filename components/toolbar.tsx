@@ -11,7 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -84,16 +83,12 @@ type ToolkitMetadata = {
 
 interface ToolCardProps {
   toolkit: ToolkitMetadata;
-  isEnabled: boolean;
-  onToggle: (enabled: boolean) => void;
   userId?: string;
   onConnectionDeleted?: () => void;
 }
 
 function ToolCard({
   toolkit,
-  isEnabled,
-  onToggle,
   userId,
   onConnectionDeleted,
 }: ToolCardProps) {
@@ -322,12 +317,6 @@ function ToolCard({
             )}
             <CardTitle className="text-base">{toolkit.name}</CardTitle>
           </div>
-          <Switch
-            id={`enable-${toolkit.slug}`}
-            checked={isEnabled}
-            onCheckedChange={onToggle}
-            aria-label={`Enable ${toolkit.name}`}
-          />
         </div>
       </CardHeader>
       <CardContent className="pt-0 pb-3">
@@ -408,7 +397,6 @@ function ToolCard({
                 setConnectionStatus('idle');
                 setIsDialogOpen(true);
               }}
-              disabled={!isEnabled}
             >
               Try Again
             </Button>
@@ -420,7 +408,6 @@ function ToolCard({
                 variant="outline"
                 size="sm"
                 className="w-full"
-                disabled={!isEnabled}
               >
                 Connect
               </Button>
@@ -485,17 +472,11 @@ type ToolbarContext = {
   setOpenMobile: (open: boolean) => void;
   isMobile: boolean;
   toggleToolbar: () => void;
-  enabledTools: Set<string>;
-  setEnabledTools: React.Dispatch<React.SetStateAction<Set<string>>>;
-  enabledToolkitsWithStatus: Map<string, boolean>; // slug -> isConnected
-  setEnabledToolkitsWithStatus: React.Dispatch<
-    React.SetStateAction<Map<string, boolean>>
-  >;
 };
 
 const ToolbarContext = React.createContext<ToolbarContext | null>(null);
 
-function useToolbar() {
+export function useToolbar() {
   const context = React.useContext(ToolbarContext);
   if (!context) {
     throw new Error('useToolbar must be used within a ToolbarProvider.');
@@ -504,24 +485,7 @@ function useToolbar() {
 }
 
 export function useToolbarState() {
-  const { enabledTools, setEnabledTools, enabledToolkitsWithStatus } =
-    useToolbar();
-  return {
-    state: {
-      enabledTools,
-      enabledToolkitsWithStatus,
-    },
-    setState: (
-      updater: React.SetStateAction<{ enabledTools: Set<string> }>,
-    ) => {
-      if (typeof updater === 'function') {
-        const newState = updater({ enabledTools });
-        setEnabledTools(newState.enabledTools);
-      } else {
-        setEnabledTools(updater.enabledTools);
-      }
-    },
-  };
+  return {};
 }
 
 export function useToolbarVisibility() {
@@ -532,11 +496,6 @@ export function useToolbarVisibility() {
 export function ToolbarProvider({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile();
   const [openMobile, setOpenMobile] = React.useState(false);
-  const [enabledTools, setEnabledTools] = React.useState<Set<string>>(
-    new Set(),
-  );
-  const [enabledToolkitsWithStatus, setEnabledToolkitsWithStatus] =
-    React.useState<Map<string, boolean>>(new Map());
 
   // This is the internal state of the toolbar.
   // Read from cookie if available, otherwise default to open
@@ -594,10 +553,6 @@ export function ToolbarProvider({ children }: { children: React.ReactNode }) {
       openMobile,
       setOpenMobile,
       toggleToolbar,
-      enabledTools,
-      setEnabledTools,
-      enabledToolkitsWithStatus,
-      setEnabledToolkitsWithStatus,
     }),
     [
       state,
@@ -607,10 +562,6 @@ export function ToolbarProvider({ children }: { children: React.ReactNode }) {
       openMobile,
       setOpenMobile,
       toggleToolbar,
-      enabledTools,
-      setEnabledTools,
-      enabledToolkitsWithStatus,
-      setEnabledToolkitsWithStatus,
     ],
   );
 
@@ -623,13 +574,7 @@ export function ToolbarProvider({ children }: { children: React.ReactNode }) {
 
 function ToolbarDesktop() {
   const { data: session } = useSession();
-  const {
-    state,
-    enabledTools,
-    setEnabledTools,
-    enabledToolkitsWithStatus,
-    setEnabledToolkitsWithStatus,
-  } = useToolbar();
+  const { state } = useToolbar();
   const [toolkits, setToolkits] = React.useState<ToolkitMetadata[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [fetchError, setFetchError] = React.useState<string | null>(null);
@@ -646,17 +591,6 @@ function ToolbarDesktop() {
 
       const { toolkits } = await response.json();
       setToolkits(toolkits);
-
-      // Update connection status for enabled toolkits
-      setEnabledToolkitsWithStatus((prev) => {
-        const newMap = new Map(prev);
-        toolkits.forEach((toolkit: ToolkitMetadata) => {
-          if (newMap.has(toolkit.slug)) {
-            newMap.set(toolkit.slug, toolkit.isConnected || false);
-          }
-        });
-        return newMap;
-      });
     } catch (error) {
       console.error('Failed to fetch toolkits:', error);
       setFetchError('Failed to load tools. Please try again.');
@@ -665,37 +599,23 @@ function ToolbarDesktop() {
     } finally {
       setIsLoading(false);
     }
-  }, [setEnabledToolkitsWithStatus]);
+  }, []);
 
   React.useEffect(() => {
     fetchToolkits();
   }, [fetchToolkits]);
 
-  const handleToggle = (
-    toolSlug: string,
-    enabled: boolean,
-    isConnected = false,
-  ) => {
-    setEnabledTools((prev) => {
-      const newEnabledTools = new Set(prev);
-      if (enabled) {
-        newEnabledTools.add(toolSlug);
-      } else {
-        newEnabledTools.delete(toolSlug);
-      }
-      return newEnabledTools;
-    });
+  // Listen for tool connection events
+  React.useEffect(() => {
+    const handleToolConnected = () => {
+      console.log('🔄 Tool connected, refreshing toolbar...');
+      fetchToolkits();
+    };
 
-    setEnabledToolkitsWithStatus((prev) => {
-      const newMap = new Map(prev);
-      if (enabled) {
-        newMap.set(toolSlug, isConnected);
-      } else {
-        newMap.delete(toolSlug);
-      }
-      return newMap;
-    });
-  };
+    window.addEventListener('toolConnected', handleToolConnected);
+    return () => window.removeEventListener('toolConnected', handleToolConnected);
+  }, [fetchToolkits]);
+
 
   return (
     <div
@@ -764,21 +684,13 @@ function ToolbarDesktop() {
                 <>
                   <div className="mb-4">
                     <p className="text-xs text-muted-foreground mb-3">
-                      Enable tools to enhance your chat capabilities
+                      Connect to external services to enhance your chat capabilities
                     </p>
                   </div>
                   {toolkits.map((toolkit) => (
                     <ToolCard
                       key={toolkit.slug}
                       toolkit={toolkit}
-                      isEnabled={enabledTools.has(toolkit.slug)}
-                      onToggle={(enabled) =>
-                        handleToggle(
-                          toolkit.slug,
-                          enabled,
-                          toolkit.isConnected || false,
-                        )
-                      }
                       userId={session?.user?.id}
                       onConnectionDeleted={fetchToolkits}
                     />
@@ -798,10 +710,6 @@ function ToolbarMobile() {
   const {
     openMobile,
     setOpenMobile,
-    enabledTools,
-    setEnabledTools,
-    enabledToolkitsWithStatus,
-    setEnabledToolkitsWithStatus,
   } = useToolbar();
   const [toolkits, setToolkits] = React.useState<ToolkitMetadata[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -821,17 +729,6 @@ function ToolbarMobile() {
 
       const { toolkits } = await response.json();
       setToolkits(toolkits);
-
-      // Update connection status for enabled toolkits
-      setEnabledToolkitsWithStatus((prev) => {
-        const newMap = new Map(prev);
-        toolkits.forEach((toolkit: ToolkitMetadata) => {
-          if (newMap.has(toolkit.slug)) {
-            newMap.set(toolkit.slug, toolkit.isConnected || false);
-          }
-        });
-        return newMap;
-      });
     } catch (error) {
       console.error('Failed to fetch toolkits:', error);
       setFetchError('Failed to load tools. Please try again.');
@@ -840,37 +737,23 @@ function ToolbarMobile() {
     } finally {
       setIsLoading(false);
     }
-  }, [openMobile, setEnabledToolkitsWithStatus]);
+  }, [openMobile]);
 
   React.useEffect(() => {
     fetchToolkits();
   }, [fetchToolkits]);
 
-  const handleToggle = (
-    toolSlug: string,
-    enabled: boolean,
-    isConnected = false,
-  ) => {
-    setEnabledTools((prev) => {
-      const newEnabledTools = new Set(prev);
-      if (enabled) {
-        newEnabledTools.add(toolSlug);
-      } else {
-        newEnabledTools.delete(toolSlug);
-      }
-      return newEnabledTools;
-    });
+  // Listen for tool connection events
+  React.useEffect(() => {
+    const handleToolConnected = () => {
+      console.log('🔄 Tool connected, refreshing mobile toolbar...');
+      fetchToolkits();
+    };
 
-    setEnabledToolkitsWithStatus((prev) => {
-      const newMap = new Map(prev);
-      if (enabled) {
-        newMap.set(toolSlug, isConnected);
-      } else {
-        newMap.delete(toolSlug);
-      }
-      return newMap;
-    });
-  };
+    window.addEventListener('toolConnected', handleToolConnected);
+    return () => window.removeEventListener('toolConnected', handleToolConnected);
+  }, [fetchToolkits]);
+
 
   return (
     <Sheet open={openMobile} onOpenChange={setOpenMobile}>
@@ -887,7 +770,7 @@ function ToolbarMobile() {
           <SheetHeader className="p-4 border-b">
             <div className="flex items-center gap-2">
               <LucideWrench className="size-4" />
-              <SheetTitle className="text-base">Toolkits</SheetTitle>
+              <SheetTitle className="text-base">Connections</SheetTitle>
             </div>
           </SheetHeader>
 
@@ -912,21 +795,13 @@ function ToolbarMobile() {
                 <>
                   <div className="mb-4">
                     <p className="text-xs text-muted-foreground mb-3">
-                      Enable tools to enhance your chat capabilities
+                      Connect to external services to enhance your chat capabilities
                     </p>
                   </div>
                   {toolkits.map((toolkit) => (
                     <ToolCard
                       key={toolkit.slug}
                       toolkit={toolkit}
-                      isEnabled={enabledTools.has(toolkit.slug)}
-                      onToggle={(enabled) =>
-                        handleToggle(
-                          toolkit.slug,
-                          enabled,
-                          toolkit.isConnected || false,
-                        )
-                      }
                       userId={session?.user?.id}
                       onConnectionDeleted={fetchToolkits}
                     />
@@ -978,20 +853,16 @@ export function ToolbarTrigger() {
 }
 
 export function ToolBarTrigger() {
-  const { toggleToolbar, open, enabledTools } = useToolbar();
-  const hasEnabledTools = enabledTools.size > 0;
+  const { toggleToolbar, open } = useToolbar();
 
   return (
     <TooltipProvider delayDuration={0}>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant={hasEnabledTools ? 'default' : 'outline'}
+            variant="outline"
             onClick={toggleToolbar}
-            className={cn(
-              'h-10 px-4 order-5 md:ml-auto relative flex items-center gap-2',
-              hasEnabledTools && 'animate-pulse',
-            )}
+            className="h-10 px-4 order-5 md:ml-auto relative flex items-center gap-2"
             aria-label="Toggle Toolkits"
           >
             {open ? (
@@ -999,19 +870,11 @@ export function ToolBarTrigger() {
             ) : (
               <LucideWrench className="size-5" />
             )}
-            <span className="font-medium">Toolkits</span>
-            {hasEnabledTools && !open && (
-              <span className="absolute -top-1 -right-1 size-3 bg-green-500 rounded-full" />
-            )}
+            <span className="font-medium">Connections</span>
           </Button>
         </TooltipTrigger>
         <TooltipContent side="left" align="center">
-          {open
-            ? 'Close Toolkits'
-            : hasEnabledTools
-              ? `Open Toolkits (${enabledTools.size} active)`
-              : 'Open Toolkits'}{' '}
-          (⌘T)
+          {open ? 'Close Connections' : 'Open Connections'} (⌘T)
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

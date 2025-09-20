@@ -463,8 +463,34 @@ export async function saveMessages({
   messages: Array<DBMessage>;
 }) {
   try {
-    return await db.insert(message).values(messages);
+    console.log('💾 Attempting to save messages:', {
+      count: messages.length,
+      firstMessage: {
+        id: messages[0]?.id,
+        chatId: messages[0]?.chatId,
+        role: messages[0]?.role,
+        partsLength: messages[0]?.parts?.length,
+        attachmentsLength: messages[0]?.attachments?.length,
+      }
+    });
+    
+    const result = await db.insert(message).values(messages);
+    console.log('✅ Messages saved successfully');
+    return result;
   } catch (error) {
+    console.error('❌ Database save error:', error);
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      code: (error as any)?.code,
+      constraint: (error as any)?.constraint,
+      detail: (error as any)?.detail,
+      messages: messages.map(m => ({
+        id: m.id,
+        chatId: m.chatId,
+        role: m.role,
+        partsLength: m.parts?.length,
+      }))
+    });
     throw new ChatSDKError('bad_request:database', 'Failed to save messages');
   }
 }

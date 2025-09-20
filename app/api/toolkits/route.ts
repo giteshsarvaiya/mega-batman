@@ -52,13 +52,22 @@ export async function GET() {
         userIds: [session.user.id],
       });
 
+      console.log('🔍 Connected accounts from Composio:', {
+        userId: session.user.id,
+        totalAccounts: connectedAccounts.items?.length || 0,
+        accounts: connectedAccounts.items?.map((acc: any) => ({
+          id: acc.id,
+          toolkitSlug: acc.toolkit?.slug,
+          toolkitSlugUpper: acc.toolkit?.slug?.toUpperCase(),
+        })) || []
+      });
+
       // Extract toolkit slugs and connection IDs from connected accounts
       connectedAccounts.items.forEach((account: ConnectedAccount) => {
         if (account.toolkit?.slug && account.id) {
-          connectedToolkitMap.set(
-            account.toolkit.slug.toUpperCase(),
-            account.id,
-          );
+          const upperSlug = account.toolkit.slug.toUpperCase();
+          connectedToolkitMap.set(upperSlug, account.id);
+          console.log(`🔗 Mapped ${upperSlug} -> ${account.id}`);
         }
       });
     } catch (error) {
@@ -72,6 +81,15 @@ export async function GET() {
         const toolkit = (await composio.toolkits.get(slug)) as ToolkitResponse;
         const upperSlug = slug.toUpperCase();
         const connectionId = connectedToolkitMap.get(upperSlug);
+        const isConnected = !!connectionId;
+
+        console.log(`🛠️ Toolkit ${upperSlug}:`, {
+          slug: toolkit.slug,
+          name: toolkit.name,
+          connectionId,
+          isConnected,
+          availableConnections: Array.from(connectedToolkitMap.keys())
+        });
 
         return {
           name: toolkit.name,
@@ -79,7 +97,7 @@ export async function GET() {
           description: toolkit.meta?.description,
           logo: toolkit.meta?.logo,
           categories: toolkit.meta?.categories,
-          isConnected: !!connectionId,
+          isConnected,
           connectionId: connectionId || undefined,
         };
       } catch (error) {
