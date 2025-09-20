@@ -86,9 +86,11 @@ export function Chat({
       };
     },
     onFinish: () => {
+      console.log('✅ Chat onFinish called');
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
+      console.error('❌ Chat error:', error);
       if (error instanceof ChatSDKError) {
         toast({
           type: 'error',
@@ -103,8 +105,18 @@ export function Chat({
 
   const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
 
+  // Log message changes
+  useEffect(() => {
+    console.log('📨 Messages updated:', {
+      count: messages.length,
+      lastMessage: messages[messages.length - 1]?.role,
+      status
+    });
+  }, [messages, status]);
+
   useEffect(() => {
     if (query && !hasAppendedQuery) {
+      console.log('🔍 Appending query:', query);
       append({
         role: 'user',
         content: query,

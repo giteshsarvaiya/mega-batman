@@ -60,12 +60,20 @@ function getStreamContext() {
 }
 
 export async function POST(request: Request) {
+  console.log('🚀 Chat API POST request received');
   let requestBody: PostRequestBody;
 
   try {
     const json = await request.json();
+    console.log('📝 Request body parsed:', { 
+      hasMessage: !!json.message, 
+      hasId: !!json.id,
+      selectedChatModel: json.selectedChatModel,
+      enabledToolkitsCount: json.enabledToolkits?.length || 0
+    });
     requestBody = postRequestBodySchema.parse(json);
-  } catch (_) {
+  } catch (error) {
+    console.error('❌ Failed to parse request body:', error);
     return new ChatSDKError('bad_request:api').toResponse();
   }
 
@@ -78,49 +86,79 @@ export async function POST(request: Request) {
       enabledToolkits,
     } = requestBody;
 
+    console.log('👤 Checking authentication...');
+    
+    // Check critical environment variables
+    const envCheck = {
+      ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
+      POSTGRES_URL: !!process.env.POSTGRES_URL,
+      AUTH_SECRET: !!process.env.AUTH_SECRET,
+    };
+    console.log('🔧 Environment variables check:', envCheck);
+    
     const session = await auth();
 
     if (!session?.user) {
+      console.error('❌ No session or user found');
       return new ChatSDKError('unauthorized:chat').toResponse();
     }
 
+    console.log('✅ User authenticated:', { 
+      userId: session.user.id, 
+      userType: session.user.type,
+      email: session.user.email 
+    });
+
     const userType: UserType = session.user.type;
 
+    console.log('📊 Checking rate limits...');
     const messageCount = await getMessageCountByUserId({
       id: session.user.id,
       differenceInHours: 24,
     });
 
+    console.log('📈 Message count:', { messageCount, maxAllowed: entitlementsByUserType[userType].maxMessagesPerDay });
+
     if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
+      console.error('❌ Rate limit exceeded');
       return new ChatSDKError('rate_limit:chat').toResponse();
     }
 
+    console.log('💬 Checking chat existence...');
     const chat = await getChatById({ id });
 
     if (!chat) {
+      console.log('🆕 Creating new chat...');
       const title = await generateTitleFromUserMessage({
         message,
       });
 
+      console.log('📝 Generated title:', title);
       await saveChat({
         id,
         userId: session.user.id,
         title,
         visibility: selectedVisibilityType,
       });
+      console.log('✅ New chat saved');
     } else {
+      console.log('📖 Existing chat found:', { chatId: chat.id, userId: chat.userId });
       if (chat.userId !== session.user.id) {
+        console.error('❌ Chat access forbidden');
         return new ChatSDKError('forbidden:chat').toResponse();
       }
     }
 
+    console.log('📜 Fetching previous messages...');
     const previousMessages = await getMessagesByChatId({ id });
+    console.log('📋 Previous messages count:', previousMessages.length);
 
     const messages = appendClientMessage({
       // @ts-expect-error: todo add type conversion from DBMessage[] to UIMessage[]
       messages: previousMessages,
       message,
     });
+    console.log('📝 Total messages for AI:', messages.length);
 
     const { longitude, latitude, city, country } = geolocation(request);
 
@@ -131,6 +169,7 @@ export async function POST(request: Request) {
       country,
     };
 
+    console.log('💾 Saving user message...');
     await saveMessages({
       messages: [
         {
@@ -143,34 +182,42 @@ export async function POST(request: Request) {
         },
       ],
     });
+    console.log('✅ User message saved');
 
     const streamId = generateUUID();
+    console.log('🆔 Generated stream ID:', streamId);
     await createStreamId({ streamId, chatId: id });
+    console.log('✅ Stream ID created');
 
+    console.log('🔄 Creating data stream...');
     const stream = createDataStream({
       execute: async (dataStream) => {
+        console.log('🚀 Stream execution started');
+        
         // Extract just the slugs for the getComposioTools function
-        // Only include toolkits that are both enabled AND connected
-        const toolkitSlugs = enabledToolkits
-          ?.filter((t) => t.isConnected)
-          ?.map((t) => t.slug) || [];
-
-        // Debug logging
-        console.log('=== DEBUG INFO ===');
-        console.log('Enabled toolkits:', enabledToolkits);
-        console.log('Filtered toolkit slugs:', toolkitSlugs);
-        console.log('User ID:', session.user.id);
+        const toolkitSlugs = enabledToolkits?.map((t) => t.slug) || [];
+        console.log('🛠️ Toolkit slugs:', toolkitSlugs);
 
         // Fetch Composio tools if toolkits are enabled
+        console.log('🔧 Fetching Composio tools...');
         const composioTools = await getComposioTools(
           session.user.id,
           toolkitSlugs,
         );
+        console.log('✅ Composio tools fetched:', Object.keys(composioTools).length, 'tools');
 
-        // Debug logging
-        console.log('Composio tools loaded:', Object.keys(composioTools));
-        console.log('==================');
-
+        console.log('🤖 Starting AI stream with model:', selectedChatModel);
+        console.log('📨 Messages being sent to AI:', messages.length);
+        
+        // Check if API key is available
+        const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+        console.log('🔑 Anthropic API key available:', hasAnthropicKey);
+        
+        if (!hasAnthropicKey) {
+          console.error('❌ ANTHROPIC_API_KEY is missing!');
+          throw new Error('ANTHROPIC_API_KEY environment variable is required');
+        }
+        
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
           system: systemPrompt({ selectedChatModel, requestHints }),
@@ -183,8 +230,10 @@ export async function POST(request: Request) {
             ...composioTools,
           },
           onFinish: async ({ response }) => {
+            console.log('🏁 AI stream finished');
             if (session.user?.id) {
               try {
+                console.log('💾 Saving assistant response...');
                 const assistantId = getTrailingMessageId({
                   messages: response.messages.filter(
                     (message) => message.role === 'assistant',
@@ -192,8 +241,11 @@ export async function POST(request: Request) {
                 });
 
                 if (!assistantId) {
+                  console.error('❌ No assistant message found in response!');
                   throw new Error('No assistant message found!');
                 }
+
+                console.log('🆔 Assistant message ID:', assistantId);
 
                 const [, assistantMessage] = appendResponseMessages({
                   messages: [message],
@@ -213,9 +265,12 @@ export async function POST(request: Request) {
                     },
                   ],
                 });
-              } catch (_) {
-                console.error('Failed to save chat');
+                console.log('✅ Assistant message saved to database');
+              } catch (error) {
+                console.error('❌ Failed to save assistant message:', error);
               }
+            } else {
+              console.log('⚠️ No session user ID, skipping assistant message save');
             }
           },
           experimental_telemetry: {
@@ -224,30 +279,41 @@ export async function POST(request: Request) {
           },
         });
 
+        console.log('📡 Consuming stream...');
         result.consumeStream();
 
+        console.log('🔄 Merging into data stream...');
         result.mergeIntoDataStream(dataStream, {
           sendReasoning: true,
         });
+        console.log('✅ Stream merged successfully');
       },
-      onError: () => {
+      onError: (error) => {
+        console.error('❌ Stream error occurred:', error);
         return 'Oops, an error occurred!';
       },
     });
 
+    console.log('🌊 Getting stream context...');
     const streamContext = getStreamContext();
 
     if (streamContext) {
+      console.log('✅ Using resumable stream');
       return new Response(
         await streamContext.resumableStream(streamId, () => stream),
       );
     } else {
+      console.log('⚠️ Using regular stream (no Redis context)');
       return new Response(stream);
     }
   } catch (error) {
     if (error instanceof ChatSDKError) {
       return error.toResponse();
     }
+    
+    // Handle unexpected errors
+    console.error('Unexpected error in chat API:', error);
+    return new ChatSDKError('bad_request:api').toResponse();
   }
 }
 
