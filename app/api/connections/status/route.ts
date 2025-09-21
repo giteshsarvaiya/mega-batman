@@ -34,19 +34,39 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Wait for connection to complete (with timeout)
-    const connection = (await composio.connectedAccounts.waitForConnection(
-      connectionId,
-      // Optional: Add timeout configuration if supported
-    )) as ConnectionStatus;
+    console.log(`🔍 Checking connection status for ID: ${connectionId}`);
+    
+    // First try to get the connection directly without waiting
+    try {
+      const connection = await composio.connectedAccounts.get(connectionId);
+      console.log(`📊 Connection status for ${connectionId}:`, connection.status);
+      
+      return NextResponse.json({
+        id: connection.id,
+        status: connection.status,
+        authConfig: connection.authConfig,
+        data: connection.data,
+        params: connection.params,
+      });
+    } catch (directError) {
+      console.log(`⚠️ Direct connection check failed, trying waitForConnection:`, directError);
+      
+      // If direct check fails, try waitForConnection with timeout
+      const connection = (await composio.connectedAccounts.waitForConnection(
+        connectionId,
+        // Optional: Add timeout configuration if supported
+      )) as ConnectionStatus;
 
-    return NextResponse.json({
-      id: connection.id,
-      status: connection.status,
-      authConfig: connection.authConfig,
-      data: connection.data,
-      params: connection.params,
-    });
+      console.log(`📊 WaitForConnection result for ${connectionId}:`, connection.status);
+
+      return NextResponse.json({
+        id: connection.id,
+        status: connection.status,
+        authConfig: connection.authConfig,
+        data: connection.data,
+        params: connection.params,
+      });
+    }
   } catch (error) {
     console.error('Failed to get connection status:', error);
 

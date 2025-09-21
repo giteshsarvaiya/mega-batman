@@ -126,6 +126,67 @@ export function ToolActivation({
     return () => window.removeEventListener('toolConnected', handleToolConnected);
   }, [requiredTools, toast]);
 
+  // Periodic check for tool connection status (fallback mechanism)
+  useEffect(() => {
+    const checkInterval = setInterval(async () => {
+      // Only check if we're waiting for tools to be connected
+      if (requiredTools.some(tool => {
+        const currentStatus = currentToolStatus.get(tool.slug);
+        return currentStatus !== undefined ? !currentStatus : !tool.isConnected;
+      })) {
+        console.log('🔄 Periodic check: Refreshing tool status...');
+        try {
+          const response = await fetch('/api/toolkits');
+          if (response.ok) {
+            const { toolkits } = await response.json();
+            const statusMap = new Map<string, boolean>();
+            toolkits.forEach((toolkit: any) => {
+              statusMap.set(toolkit.slug, toolkit.isConnected);
+            });
+            
+            // Check if any tool status has changed
+            let statusChanged = false;
+            statusMap.forEach((isConnected, slug) => {
+              const previousStatus = currentToolStatus.get(slug);
+              if (previousStatus !== isConnected) {
+                console.log(`🔄 Tool ${slug} status changed: ${previousStatus} -> ${isConnected}`);
+                statusChanged = true;
+              }
+            });
+            
+            if (statusChanged) {
+              console.log('🔄 Tool status changed, updating...');
+              setCurrentToolStatus(statusMap);
+              
+              // Check if all required tools are now connected
+              const allRequiredToolsConnected = requiredTools.every(tool => {
+                const currentStatus = statusMap.get(tool.slug);
+                return currentStatus !== undefined ? currentStatus : tool.isConnected;
+              });
+              
+              if (allRequiredToolsConnected) {
+                console.log('🎉 All required tools are now connected via periodic check!');
+                toast({
+                  title: 'Tools Connected Successfully!',
+                  description: 'All required tools are now connected. You can retry your query.',
+                });
+                
+                // Trigger global event to refresh chat component
+                window.dispatchEvent(new CustomEvent('toolConnected', { 
+                  detail: { toolSlug: 'periodic-refresh' } 
+                }));
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Periodic tool status check failed:', error);
+        }
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(checkInterval);
+  }, [requiredTools, currentToolStatus, toast]);
+
   const handleConnectTool = async (tool: RequiredTool) => {
     if (!session?.user?.id) {
       toast({
@@ -197,7 +258,8 @@ export function ToolActivation({
                 // Notify parent component
                 onToolConnected?.(tool.slug);
                 
-                // Also trigger a global event to refresh toolbar
+                // Also trigger a global event to refresh toolbar and chat
+                console.log(`📡 Dispatching toolConnected event for ${tool.slug}`);
                 window.dispatchEvent(new CustomEvent('toolConnected', { 
                   detail: { toolSlug: tool.slug } 
                 }));
@@ -219,6 +281,7 @@ export function ToolActivation({
                 return; // Stop polling
               } else {
                 // Still in progress, continue polling
+                console.log(`⏳ Tool ${tool.slug} connection still in progress:`, statusData.status);
                 setTimeout(pollConnectionStatus, 3000); // Poll every 3 seconds
               }
             }
@@ -338,13 +401,56 @@ export function ToolActivation({
     return null;
   }
 
+  // Function to manually refresh tool status
+  const handleRefreshStatus = async () => {
+    try {
+      const response = await fetch('/api/toolkits');
+      if (response.ok) {
+        const { toolkits } = await response.json();
+        const statusMap = new Map<string, boolean>();
+        toolkits.forEach((toolkit: any) => {
+          statusMap.set(toolkit.slug, toolkit.isConnected);
+        });
+        setCurrentToolStatus(statusMap);
+        
+        // Trigger global event to refresh chat component
+        window.dispatchEvent(new CustomEvent('toolConnected', { 
+          detail: { toolSlug: 'refresh' } 
+        }));
+        
+        toast({
+          title: 'Status Refreshed',
+          description: 'Tool connection status has been updated.',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to refresh tool status:', error);
+      toast({
+        title: 'Refresh Failed',
+        description: 'Failed to refresh tool status. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div className="mt-3 p-3 bg-muted/30 border border-border rounded-lg">
-      <div className="flex items-center gap-2 mb-3">
-        <Plug className="size-4 text-muted-foreground" />
-        <span className="text-sm font-medium text-muted-foreground">
-          Tools that need to be connected
-        </span>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Plug className="size-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-muted-foreground">
+            Tools that need to be connected
+          </span>
+        </div>
+        <Button
+          onClick={handleRefreshStatus}
+          size="sm"
+          variant="ghost"
+          className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <RotateCcw className="size-3 mr-1" />
+          Refresh
+        </Button>
       </div>
       
       <div className="space-y-2">

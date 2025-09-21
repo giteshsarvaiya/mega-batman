@@ -151,20 +151,26 @@ export function Chat({
 
   // Listen for tool connection events to refresh enabled toolkits
   useEffect(() => {
-    const handleToolConnected = () => {
-      console.log('🔄 Tool connected, refreshing enabled toolkits...');
+    const handleToolConnected = (event: CustomEvent) => {
+      console.log('🔄 Tool connected event received in chat component:', event.detail);
       // Refresh the enabled toolkits when a tool is connected
       const refreshToolkits = async () => {
         try {
+          console.log('🔄 Refreshing enabled toolkits...');
           const response = await fetch('/api/toolkits');
           if (response.ok) {
             const { toolkits } = await response.json();
+            console.log('🔄 Raw toolkits from API:', toolkits.map((t: any) => ({ slug: t.slug, name: t.name, isConnected: t.isConnected })));
+            
             const connectedToolkits = toolkits
               .filter((toolkit: any) => toolkit.isConnected)
               .map((toolkit: any) => ({
                 slug: toolkit.slug,
                 isConnected: toolkit.isConnected,
               }));
+            
+            console.log('🔄 Previous enabled toolkits:', enabledToolkits);
+            console.log('🔄 New enabled toolkits:', connectedToolkits);
             setEnabledToolkits(connectedToolkits);
             console.log('🛠️ Refreshed enabled toolkits:', connectedToolkits);
           }
@@ -175,9 +181,9 @@ export function Chat({
       refreshToolkits();
     };
 
-    window.addEventListener('toolConnected', handleToolConnected);
-    return () => window.removeEventListener('toolConnected', handleToolConnected);
-  }, []);
+    window.addEventListener('toolConnected', handleToolConnected as EventListener);
+    return () => window.removeEventListener('toolConnected', handleToolConnected as EventListener);
+  }, [enabledToolkits]);
 
   const {
     messages,
