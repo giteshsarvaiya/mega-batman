@@ -19,9 +19,9 @@ function PureSuggestedActions({
 }: SuggestedActionsProps) {
   const suggestedActions = [
     {
-      title: "Read my last 5 Gmail emails",
+      title: "Read my last 2 Gmail emails",
       label: "and summarize them.",
-      action: "Read my last 5 Gmail emails and summarize them.",
+      action: "Read my last 2 Gmail emails and summarize them.",
     },
     {
       title: "What issues are assigned to me",
@@ -30,16 +30,16 @@ function PureSuggestedActions({
     },
     {
       title: "check if I am free in google calendar",
-      label: "and fix a meeting with Gitesh(gitesh@innovunglobal.com)",
+      label: "and fix a meeting with gitesh@innovunglobal.com",
       action: "Check if I am free in google calendar and fix a meeting with Gitesh(gitesh@innovunglobal.com)  on 22nd September 2025 at 10:00 AM",
     },
     {
-      title: "Fetch my 5 upcoming Google Calendar events",
+      title: "Fetch my 2 upcoming Google Calendar events",
       label: "and summarize them.",
       action: "Fetch my Google Calendar upcoming events and summarize them.",
     },
     {
-      title: "Fetch my last 5 Outlook emails",
+      title: "Fetch my last 2 Outlook emails",
       label: "and summarize them.",
       action: "Fetch my Outlook emails and summarize them.",
     },
@@ -94,7 +94,7 @@ function PureSuggestedActions({
                 content: suggestedAction.action,
               });
             }}
-            className="text-left border rounded-xl px-4 py-3.5 text-sm flex-1 gap-1 sm:flex-col w-full h-auto justify-start items-start"
+            className="text-left border rounded-xl px-4 py-3.5 text-sm flex-1 gap-1 w-full h-auto justify-start items-start flex-col"
           >
             <span className="font-medium">{suggestedAction.title}</span>
             <span className="text-muted-foreground">

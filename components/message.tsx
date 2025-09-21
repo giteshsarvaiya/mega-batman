@@ -184,21 +184,6 @@ const PurePreviewMessage = ({
                               originalQuery={getOriginalQuery()}
                             />
                           </>
-                        ) : shouldShowToolActivation && toolActivationData ? (
-                          <>
-                            <Markdown>{sanitizeText(part.text)}</Markdown>
-                            <ToolActivation
-                              requiredTools={toolActivationData.requiredTools}
-                              onToolConnected={(toolSlug) => {
-                                console.log('Tool connected:', toolSlug);
-                                reload();
-                              }}
-                              onRetryQuery={() => {
-                                reload();
-                              }}
-                              originalQuery={getOriginalQuery()}
-                            />
-                          </>
                         ) : (
                           <Markdown>{sanitizeText(part.text)}</Markdown>
                         )}

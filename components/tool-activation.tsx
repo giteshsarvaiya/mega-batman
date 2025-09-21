@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Loader2, Plug, ExternalLink, RotateCcw, Check } from 'lucide-react';

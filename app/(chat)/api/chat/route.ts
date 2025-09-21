@@ -34,6 +34,7 @@ import type { Chat } from '@/lib/db/schema';
 import { differenceInSeconds } from 'date-fns';
 import { ChatSDKError } from '@/lib/errors';
 import { getComposioTools } from '@/lib/ai/tools/composio';
+import { config } from '@/lib/config';
 
 export const maxDuration = 60;
 
@@ -157,14 +158,44 @@ export async function POST(request: Request) {
     console.log('📋 Previous messages count:', previousMessages.length);
 
     // Limit messages to prevent token limit exceeded error
-    // Keep only the last 10 messages to stay within token limits
-    const limitedPreviousMessages = previousMessages.slice(-10);
+    // Configurable via config file
+    const limitedPreviousMessages = previousMessages.slice(-config.chat.maxMessages);
     console.log('📝 Limited previous messages count:', limitedPreviousMessages.length);
+    
+    // Additional safety: if we still have too many messages, reduce further
+    const maxSafeMessages = Math.min(config.chat.maxMessages, 1);
+    const finalMessages = limitedPreviousMessages.length > maxSafeMessages 
+      ? limitedPreviousMessages.slice(-maxSafeMessages)
+      : limitedPreviousMessages;
+    console.log('📝 Final messages count (safety limit):', finalMessages.length);
+    
+    // Truncate message content to reduce tokens (aggressive truncation)
+    const truncatedMessages = finalMessages.map(msg => ({
+      ...msg,
+      parts: Array.isArray(msg.parts) ? msg.parts.map((part: any) => {
+        if (part.type === 'text' && part.text && part.text.length > 500) {
+          return {
+            ...part,
+            text: part.text.substring(0, 500) + '... [truncated]'
+          };
+        }
+        return part;
+      }) : msg.parts
+    }));
+    console.log('📝 Messages truncated for token reduction');
 
+    // Truncate current user message if too long (aggressive truncation)
+    const truncatedUserMessage = {
+      ...message,
+      content: message.content && message.content.length > 1000 
+        ? message.content.substring(0, 1000) + '... [truncated]'
+        : message.content
+    };
+    
     const messages = appendClientMessage({
       // @ts-expect-error: todo add type conversion from DBMessage[] to UIMessage[]
-      messages: limitedPreviousMessages,
-      message,
+      messages: truncatedMessages,
+      message: truncatedUserMessage,
     });
     console.log('📝 Total messages for AI:', messages.length);
 
@@ -252,12 +283,13 @@ export async function POST(request: Request) {
             const { toolkits } = await toolkitsResponse.json();
             console.log('🔍 Raw toolkits response from /api/toolkits:', toolkits.map((t: any) => ({ slug: t.slug, name: t.name, isConnected: t.isConnected })));
             
-            // Prepare tools for system prompt (all tools with connection status)
+            // Prepare tools for system prompt (only connected tools, minimal info to reduce prompt size)
             availableTools = toolkits
+              .filter((toolkit: any) => toolkit.isConnected)
               .map((toolkit: any) => ({
                 name: toolkit.name,
                 slug: toolkit.slug,
-                description: toolkit.description,
+                description: undefined, // Remove descriptions to save tokens
                 isConnected: toolkit.isConnected,
               }));
             
@@ -299,9 +331,16 @@ export async function POST(request: Request) {
         // For now, let's pass all available tools to see what the AI is actually seeing
         console.log('🤖 Using all available tools for system prompt:', availableTools.map(t => ({ slug: t.slug, isConnected: t.isConnected })));
         
+        // Use minimal system prompt to reduce tokens
+        const systemPromptText = config.chat.useMinimalPrompt 
+          ? 'Assistant.'
+          : availableTools.length > 0 
+            ? systemPrompt({ selectedChatModel, requestHints, availableTools })
+            : 'Assistant.';
+        
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),
-          system: systemPrompt({ selectedChatModel, requestHints, availableTools }),
+          system: systemPromptText,
           messages,
           maxSteps: 5,
           experimental_transform: smoothStream({ chunking: 'word' }),
@@ -313,25 +352,25 @@ export async function POST(request: Request) {
           onFinish: async ({ response }) => {
             console.log('🏁 AI stream finished');
             if (session.user?.id) {
+              const assistantId = getTrailingMessageId({
+                messages: response.messages.filter(
+                  (message) => message.role === 'assistant',
+                ),
+              });
+
+              if (!assistantId) {
+                console.error('❌ No assistant message found in response!');
+                return;
+              }
+
+              const [, assistantMessage] = appendResponseMessages({
+                messages: [message],
+                responseMessages: response.messages,
+              });
+
               try {
                 console.log('💾 Saving assistant response...');
-                const assistantId = getTrailingMessageId({
-                  messages: response.messages.filter(
-                    (message) => message.role === 'assistant',
-                  ),
-                });
-
-                if (!assistantId) {
-                  console.error('❌ No assistant message found in response!');
-                  throw new Error('No assistant message found!');
-                }
-
                 console.log('🆔 Assistant message ID:', assistantId);
-
-                const [, assistantMessage] = appendResponseMessages({
-                  messages: [message],
-                  responseMessages: response.messages,
-                });
 
                 // Validate and format message parts
                 const formattedParts = assistantMessage.parts?.map(part => {

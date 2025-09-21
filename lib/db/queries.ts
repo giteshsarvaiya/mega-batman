@@ -34,8 +34,67 @@ import { ChatSDKError } from '../errors';
 // https://authjs.dev/reference/adapter/drizzle
 
 // biome-ignore lint: Forbidden non-null assertion.
-const client = postgres(process.env.POSTGRES_URL!);
+const client = postgres(process.env.POSTGRES_URL!, {
+  // Connection pool configuration
+  max: 20, // Maximum number of connections
+  idle_timeout: 20, // Close idle connections after 20 seconds
+  connect_timeout: 10, // Connection timeout in seconds
+  // Connection health checks
+  prepare: false, // Disable prepared statements for better compatibility
+  // Error handling
+  onnotice: () => {}, // Suppress notices
+});
+
 const db = drizzle(client);
+
+// Database health check function
+export async function checkDatabaseConnection() {
+  try {
+    await client`SELECT 1`;
+    return true;
+  } catch (error) {
+    console.error('❌ Database connection check failed:', error);
+    return false;
+  }
+}
+
+// Retry wrapper for database operations
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  maxRetries: number = 3
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error as Error;
+      
+      // Check if it's a connection-related error
+      const isConnectionError = 
+        error instanceof Error && (
+          error.message.includes('ECONNRESET') ||
+          error.message.includes('ECONNREFUSED') ||
+          error.message.includes('timeout') ||
+          error.message.includes('connection')
+        );
+      
+      if (isConnectionError && attempt < maxRetries) {
+        console.warn(`⚠️ Database connection error in ${operationName} (attempt ${attempt}/${maxRetries}):`, error);
+        console.log(`🔄 Retrying in ${attempt * 1000}ms...`);
+        await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        continue;
+      }
+      
+      // If not a connection error or max retries reached, throw immediately
+      throw error;
+    }
+  }
+  
+  throw lastError;
+}
 
 export async function createGuestUser() {
   const email = `guest-${Date.now()}`;
@@ -383,7 +442,7 @@ export async function getChatsByUserId({
   startingAfter: string | null;
   endingBefore: string | null;
 }) {
-  try {
+  return withRetry(async () => {
     const extendedLimit = limit + 1;
 
     const query = (whereCondition?: SQL<any>) =>
@@ -440,12 +499,20 @@ export async function getChatsByUserId({
       chats: hasMore ? filteredChats.slice(0, limit) : filteredChats,
       hasMore,
     };
-  } catch (error) {
+  }, 'getChatsByUserId').catch((error) => {
+    console.error('❌ Database error in getChatsByUserId:', error);
+    console.error('❌ Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      userId: id,
+      limit,
+      startingAfter,
+      endingBefore,
+    });
     throw new ChatSDKError(
       'bad_request:database',
       'Failed to get chats by user id',
     );
-  }
+  });
 }
 
 export async function getChatById({ id }: { id: string }) {
@@ -465,13 +532,13 @@ export async function saveMessages({
   try {
     console.log('💾 Attempting to save messages:', {
       count: messages.length,
-      firstMessage: {
-        id: messages[0]?.id,
-        chatId: messages[0]?.chatId,
-        role: messages[0]?.role,
-        partsLength: messages[0]?.parts?.length,
-        attachmentsLength: messages[0]?.attachments?.length,
-      }
+      firstMessage: messages[0] ? {
+        id: messages[0].id,
+        chatId: messages[0].chatId,
+        role: messages[0].role,
+        partsLength: Array.isArray(messages[0].parts) ? messages[0].parts.length : 0,
+        attachmentsLength: Array.isArray(messages[0].attachments) ? messages[0].attachments.length : 0,
+      } : null
     });
     
     const result = await db.insert(message).values(messages);
@@ -488,7 +555,7 @@ export async function saveMessages({
         id: m.id,
         chatId: m.chatId,
         role: m.role,
-        partsLength: m.parts?.length,
+        partsLength: Array.isArray(m.parts) ? m.parts.length : 0,
       }))
     });
     throw new ChatSDKError('bad_request:database', 'Failed to save messages');
