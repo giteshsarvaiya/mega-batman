@@ -25,6 +25,7 @@ import type { UseChatHelpers } from '@ai-sdk/react';
 const PurePreviewMessage = ({
   chatId,
   message,
+  previousUserMessage,
   vote,
   isLoading,
   setMessages,
@@ -34,6 +35,7 @@ const PurePreviewMessage = ({
 }: {
   chatId: string;
   message: UIMessage;
+  previousUserMessage?: UIMessage;
   vote: Vote | undefined;
   isLoading: boolean;
   setMessages: UseChatHelpers['setMessages'];
@@ -72,9 +74,12 @@ const PurePreviewMessage = ({
 
   // Extract original query from the previous user message
   const getOriginalQuery = () => {
-    // This is a simplified approach - in a real implementation, you might want to
-    // pass the messages array or find the last user message
-    return "Your previous request"; // Placeholder for now
+    if (previousUserMessage?.content) {
+      console.log('🔍 Original query found:', previousUserMessage.content);
+      return previousUserMessage.content;
+    }
+    console.log('⚠️ No previous user message found, using fallback');
+    return "Your previous request"; // Fallback
   };
 
 
@@ -178,8 +183,25 @@ const PurePreviewMessage = ({
                                 reload();
                               }}
                               onRetryQuery={() => {
-                                // Reload the chat to retry the last user message
-                                reload();
+                                // Retry the original user query
+                                const originalQuery = getOriginalQuery();
+                                if (originalQuery && originalQuery !== "Your previous request") {
+                                  console.log('🔄 Retrying query:', originalQuery);
+                                  // Append the original query as a new user message
+                                  setMessages((prev) => [
+                                    ...prev,
+                                    {
+                                      id: `retry-${Date.now()}`,
+                                      role: 'user',
+                                      content: originalQuery,
+                                      createdAt: new Date(),
+                                    },
+                                  ]);
+                                } else {
+                                  console.log('⚠️ No original query found, falling back to reload');
+                                  // Fallback to reload if no original query found
+                                  reload();
+                                }
                               }}
                               originalQuery={getOriginalQuery()}
                             />

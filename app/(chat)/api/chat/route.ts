@@ -283,9 +283,8 @@ export async function POST(request: Request) {
             const { toolkits } = await toolkitsResponse.json();
             console.log('🔍 Raw toolkits response from /api/toolkits:', toolkits.map((t: any) => ({ slug: t.slug, name: t.name, isConnected: t.isConnected })));
             
-            // Prepare tools for system prompt (only connected tools, minimal info to reduce prompt size)
+            // Prepare tools for system prompt (both connected and disconnected tools, minimal info to reduce prompt size)
             availableTools = toolkits
-              .filter((toolkit: any) => toolkit.isConnected)
               .map((toolkit: any) => ({
                 name: toolkit.name,
                 slug: toolkit.slug,
@@ -331,12 +330,14 @@ export async function POST(request: Request) {
         // For now, let's pass all available tools to see what the AI is actually seeing
         console.log('🤖 Using all available tools for system prompt:', availableTools.map(t => ({ slug: t.slug, isConnected: t.isConnected })));
         
-        // Use minimal system prompt to reduce tokens
-        const systemPromptText = config.chat.useMinimalPrompt 
-          ? 'Assistant.'
-          : availableTools.length > 0 
-            ? systemPrompt({ selectedChatModel, requestHints, availableTools })
-            : 'Assistant.';
+        // Use proper system prompt when tools are available, minimal otherwise
+        const systemPromptText = availableTools.length > 0
+          ? systemPrompt({ selectedChatModel, requestHints, availableTools })
+          : config.chat.useMinimalPrompt 
+            ? 'Assistant.'
+            : systemPrompt({ selectedChatModel, requestHints, availableTools });
+        
+        console.log('🤖 System prompt being used:', systemPromptText.substring(0, 200) + '...');
         
         const result = streamText({
           model: myProvider.languageModel(selectedChatModel),

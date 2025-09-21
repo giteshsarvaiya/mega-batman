@@ -1,7 +1,16 @@
 import type { Geo } from '@vercel/functions';
 import { config } from '@/lib/config';
 
-export const regularPrompt = 'Assistant. Use connected tools directly. Show [TOOL_ACTIVATION_REQUIRED:tool1,tool2] for disconnected tools.';
+export const regularPrompt = `Assistant. 
+
+CRITICAL RULES:
+1. If user requests something requiring a DISCONNECTED tool, respond with: [TOOL_ACTIVATION_REQUIRED:tool_slug] followed by a brief message.
+2. If user requests something requiring CONNECTED tools, use the actual tool functions directly.
+3. NEVER ask "Would you like help setting up..." - always use the activation marker format.
+
+Examples:
+- User asks for Gmail emails but Gmail is disconnected → "[TOOL_ACTIVATION_REQUIRED:gmail] I need access to your Gmail to read your emails."
+- User asks for Gmail emails and Gmail is connected → Use the Gmail tool functions directly.`;
 
 export interface RequestHints {
   latitude: Geo['latitude'];
@@ -27,14 +36,14 @@ export const getToolAvailabilityPrompt = (availableTools: ToolInfo[]) => {
   const connectedTools = availableTools.filter(tool => tool.isConnected);
   const disconnectedTools = availableTools.filter(tool => !tool.isConnected);
 
-  let prompt = '';
+  let prompt = '\n\nTOOL STATUS:\n';
   
   if (connectedTools.length > 0) {
-    prompt += 'Connected: ' + connectedTools.map(tool => tool.slug).join(',');
+    prompt += `✅ CONNECTED (use directly): ${connectedTools.map(tool => tool.slug).join(', ')}\n`;
   }
 
   if (disconnectedTools.length > 0) {
-    prompt += ' Disconnected: ' + disconnectedTools.map(tool => tool.slug).join(',');
+    prompt += `❌ DISCONNECTED (use [TOOL_ACTIVATION_REQUIRED:slug]): ${disconnectedTools.map(tool => tool.slug).join(', ')}\n`;
   }
 
   return prompt;
@@ -52,7 +61,7 @@ export const systemPrompt = ({
   const requestPrompt = getRequestPromptFromHints(requestHints);
   const toolPrompt = getToolAvailabilityPrompt(availableTools);
   
-  // Only include tool prompt if there are connected tools
+  // Always include tool prompt if there are any tools (connected or disconnected)
   if (availableTools.length === 0) {
     return regularPrompt;
   }
