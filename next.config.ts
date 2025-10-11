@@ -12,6 +12,9 @@ const nextConfig: NextConfig = {
       {
         hostname: 'cdn.jsdelivr.net',
       },
+      {
+        hostname: 'logos.composio.dev',
+      },
     ],
   },
 };
